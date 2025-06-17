@@ -1,298 +1,323 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { z } from "zod";
-import { GeneralDashboardStats, ApplicationStatus } from "@/types/custom.types";
-import { checkAuthWithProfile } from "@/lib/auth-utils";
+import { 
+  JobSeekerDashboardStats, 
+  EmployerDashboardStats, 
+  AdminDashboardStats,
+  Profile 
+} from "@/types/custom.types";
 import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
-const schema = z.object({
-  date_range: z.object({
-    start: z.string(),
-    end: z.string(),
-  }).optional(),
-});
-
+type DashboardStats = JobSeekerDashboardStats | EmployerDashboardStats | AdminDashboardStats;
 type Result = 
-  | { success: true; data: GeneralDashboardStats }
+  | { success: true; data: DashboardStats } 
   | { success: false; error: string };
 
-export async function getStats(
-  params: z.infer<typeof schema>
-): Promise<Result> {
+export async function getDashboardStats(): Promise<Result> {
   try {
-    // 1. Validate input
-    schema.parse(params);
-
-    // 2. Check authentication
+    // 1. Check authentication and get current profile
     const authCheck = await checkAuthWithProfile();
     if (!authCheck.success) {
       return { success: false, error: authCheck.error };
     }
 
-    const supabase = await createClient();
+    const { profile } = authCheck;
 
-    // 3. Date ranges for calculations
-    const now = new Date();
-    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    // 2. Get stats based on user role
+    switch (profile.role) {
+      case "job_seeker":
+        return await getJobSeekerStats(profile);
+      case "employer":
+        return await getEmployerStats(profile);
+      case "admin":
+        return await getAdminStats();
+      default:
+        return { success: false, error: ERROR_MESSAGES.AUTH.UNAUTHORIZED };
+    }
+  } catch {
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
+  }
+}
 
-    // 4. Get overview statistics
-    const [
-      totalJobsResult,
-      totalCompaniesResult,
-      totalApplicationsResult,
-      activeJobsResult,
-    ] = await Promise.all([
-      supabase.from("jobs").select("id", { count: "exact" }),
-      supabase.from("companies").select("id", { count: "exact" }),
-      supabase.from("applications").select("id", { count: "exact" }),
-      supabase.from("jobs").select("id", { count: "exact" }).eq("status", "published"),
-    ]);
+async function getJobSeekerStats(profile: Profile): Promise<Result> {
+  const supabase = await createClient();
 
-    // 5. Get growth metrics
-    const [
-      newUsersThisMonth,
-      newJobsThisMonth,
-      newApplicationsThisMonth,
-      lastMonthUsers,
-      lastMonthJobs,
-      lastMonthApplications,
-    ] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact" })
-        .gte("created_at", currentMonth.toISOString()),
-      supabase
-        .from("jobs")
-        .select("id", { count: "exact" })
-        .gte("created_at", currentMonth.toISOString()),
-      supabase
-        .from("applications")
-        .select("id", { count: "exact" })
-        .gte("applied_at", currentMonth.toISOString()),
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact" })
-        .gte("created_at", lastMonth.toISOString())
-        .lt("created_at", currentMonth.toISOString()),
-      supabase
-        .from("jobs")
-        .select("id", { count: "exact" })
-        .gte("created_at", lastMonth.toISOString())
-        .lt("created_at", currentMonth.toISOString()),
-      supabase
-        .from("applications")
-        .select("id", { count: "exact" })
-        .gte("applied_at", lastMonth.toISOString())
-        .lt("applied_at", currentMonth.toISOString()),
-    ]);
+  try {
+    // Get application stats for job seeker
+    const { data: applications, error: applicationsError } = await supabase
+      .from("applications")
+      .select("id, status, applied_at")
+      .eq("applicant_id", profile.id);
 
-    // 6. Calculate growth rates
-    const userGrowthRate = (lastMonthUsers.count || 0) > 0
-      ? Math.round((((newUsersThisMonth.count || 0) - (lastMonthUsers.count || 0)) / (lastMonthUsers.count || 0)) * 100)
-      : (newUsersThisMonth.count || 0) > 0 ? 100 : 0;
+    if (applicationsError) {
+      return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
+    }
 
-    const jobGrowthRate = (lastMonthJobs.count || 0) > 0
-      ? Math.round((((newJobsThisMonth.count || 0) - (lastMonthJobs.count || 0)) / (lastMonthJobs.count || 0)) * 100)
-      : (newJobsThisMonth.count || 0) > 0 ? 100 : 0;
+    // Get job seeker profile stats
+    const { data: jobSeekerProfile } = await supabase
+      .from("job_seeker_profiles")
+      .select("*")
+      .eq("user_id", profile.id)
+      .single();
 
-    const applicationGrowthRate = (lastMonthApplications.count || 0) > 0
-      ? Math.round((((newApplicationsThisMonth.count || 0) - (lastMonthApplications.count || 0)) / (lastMonthApplications.count || 0)) * 100)
-      : (newApplicationsThisMonth.count || 0) > 0 ? 100 : 0;
+    const totalApplications = applications?.length || 0;
+    const thisMonth = new Date();
+    thisMonth.setMonth(thisMonth.getMonth() - 1);
+    
+    const applicationsThisMonth = applications?.filter(app => 
+      new Date(app.applied_at) > thisMonth
+    ).length || 0;
 
-    // 7. Get recent activity
-    const [recentApplications, recentJobs] = await Promise.all([
-      supabase
-        .from("applications")
-        .select(`
-          id,
-          applied_at,
-          status,
-          jobs!inner(title),
-          applicant:profiles!applicant_id(full_name, avatar_url)
-        `)
-        .order("applied_at", { ascending: false })
-        .limit(10),
-      supabase
-        .from("jobs")
-        .select(`
-          id,
-          title,
-          created_at,
-          status,
-          companies!inner(name, logo_url),
-          locations!inner(name)
-        `)
-        .order("created_at", { ascending: false })
-        .limit(10),
-    ]);
+    const pendingApplications = applications?.filter(app => 
+      app.status === "pending"
+    ).length || 0;
 
-    // 8. Get performance indicators
-    const [
-      activeJobSeekers,
-      pendingApplications,
-    ] = await Promise.all([
-      supabase
-        .from("job_seeker_profiles")
-        .select("user_id", { count: "exact" })
-        .eq("is_looking_for_job", true),
-      supabase
-        .from("applications")
-        .select("id", { count: "exact" })
-        .eq("status", "pending"),
-    ]);
+    const interviewApplications = applications?.filter(app => 
+      app.status === "interviewing"
+    ).length || 0;
 
-    // 9. Get trending data - Popular industries
-    const { data: popularIndustries } = await supabase
+    const rejectedApplications = applications?.filter(app => 
+      app.status === "rejected"
+    ).length || 0;
+
+    const acceptedApplications = applications?.filter(app => 
+      app.status === "accepted"
+    ).length || 0;
+
+    const successRate = totalApplications > 0 
+      ? Math.round((acceptedApplications / totalApplications) * 100) 
+      : 0;
+
+    // Get recommended jobs count
+    const { data: jobs } = await supabase
       .from("jobs")
-      .select(`
-        industry_id,
-        industries!inner(name, slug)
-      `)
+      .select("id")
       .eq("status", "published")
-      .then(result => ({
-        data: result.data
-          ?.reduce((acc: Array<{ industry: string; count: number; slug: string }>, job) => {
-            const industry = (job.industries as { name: string; slug: string }).name;
-            const slug = (job.industries as { name: string; slug: string }).slug;
-            const existing = acc.find(item => item.industry === industry);
-            if (existing) {
-              existing.count++;
-            } else {
-              acc.push({ industry, slug, count: 1 });
-            }
-            return acc;
-          }, [])
-          ?.sort((a, b) => b.count - a.count)
-          ?.slice(0, 5) || [],
-        error: result.error
-      }));
+      .limit(10);
 
-    // 10. Get activity timeline for last 7 days
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(now);
-      date.setDate(date.getDate() - (6 - i));
-      return date.toISOString().split('T')[0];
-    });
-
-    const activityTimeline = await Promise.all(
-      last7Days.map(async (date) => {
-        const nextDate = new Date(date);
-        nextDate.setDate(nextDate.getDate() + 1);
-        
-        const [jobsResult, applicationsResult, usersResult] = await Promise.all([
-          supabase
-            .from("jobs")
-            .select("id", { count: "exact" })
-            .gte("created_at", date + "T00:00:00Z")
-            .lt("created_at", nextDate.toISOString().split('T')[0] + "T00:00:00Z"),
-          supabase
-            .from("applications")
-            .select("id", { count: "exact" })
-            .gte("applied_at", date + "T00:00:00Z")
-            .lt("applied_at", nextDate.toISOString().split('T')[0] + "T00:00:00Z"),
-          supabase
-            .from("profiles")
-            .select("id", { count: "exact" })
-            .gte("created_at", date + "T00:00:00Z")
-            .lt("created_at", nextDate.toISOString().split('T')[0] + "T00:00:00Z"),
-        ]);
-        
-        return {
-          date,
-          jobs_posted: jobsResult.count || 0,
-          applications_submitted: applicationsResult.count || 0,
-          new_users: usersResult.count || 0,
-        };
-      })
-    );
-
-    // 11. Format recent activities
-    const formattedRecentApplications = recentApplications.data?.map(app => ({
-      id: app.id,
-      type: "application" as const,
-      title: `Ứng tuyển cho "${(app.jobs as { title: string }).title}"`,
-      user_name: (app.applicant as { full_name: string }).full_name || "Ẩn danh",
-      user_avatar: (app.applicant as { avatar_url: string }).avatar_url || "",
-      timestamp: app.applied_at,
-      status: app.status,
-    })) || [];
-
-    const formattedRecentJobs = recentJobs.data?.slice(0, 5).map(job => ({
-      id: job.id,
-      type: "job_post" as const,
-      title: `Tuyển dụng "${job.title}"`,
-      company_name: (job.companies as { name: string }).name,
-      company_logo: (job.companies as { logo_url: string }).logo_url || "",
-      location: (job.locations as { name: string }).name,
-      timestamp: job.created_at,
-      status: job.status,
-    })) || [];
-
-    // 12. Format response
-    const generalStats: GeneralDashboardStats = {
-      overview: {
-        total_jobs: totalJobsResult.count || 0,
-        total_companies: totalCompaniesResult.count || 0,
-        total_job_seekers: activeJobSeekers.count || 0,
-        total_applications: totalApplicationsResult.count || 0,
-        active_jobs: activeJobsResult.count || 0,
-        pending_applications: pendingApplications.count || 0,
-        new_users_this_month: newUsersThisMonth.count || 0,
-        jobs_filled_this_month: 0, // This would need to be calculated
+    const stats: JobSeekerDashboardStats = {
+      profile: {
+        is_complete: !!jobSeekerProfile,
+        completion_percentage: jobSeekerProfile ? 85 : 20,
+        profile_views: 0,
+        profile_views_this_month: 0,
+        last_updated: profile.updated_at || profile.created_at,
       },
-      growth: {
-        jobs_growth: jobGrowthRate,
-        companies_growth: 0, // This would need to be calculated
-        applications_growth: applicationGrowthRate,
-        users_growth: userGrowthRate,
+      applications: {
+        total_applications: totalApplications,
+        pending_applications: pendingApplications,
+        interview_applications: interviewApplications,
+        rejected_applications: rejectedApplications,
+        accepted_applications: acceptedApplications,
+        application_success_rate: successRate,
+        avg_response_time: 0,
+        applications_this_month: applicationsThisMonth,
       },
-      recent_activity: {
-        recent_jobs: formattedRecentJobs.slice(0, 5).map(job => ({
-          id: job.id,
-          title: job.title,
-          company_name: job.company_name,
-          created_at: job.timestamp,
-          applications_count: 0, // This would need to be calculated
-        })),
-        recent_applications: formattedRecentApplications.slice(0, 5).map(app => ({
-          id: app.id,
-          job_title: app.title.replace('Ứng tuyển cho "', '').replace('"', ''),
-          company_name: "", // This would need to be extracted from job data
-          applicant_name: app.user_name,
-          created_at: app.timestamp,
-          status: app.status as ApplicationStatus,
-        })),
-        recent_companies: [], // This would need to be implemented
+      jobs: {
+        saved_jobs: 0,
+        recommended_jobs: jobs?.length || 0,
+        new_jobs_in_preferred_industry: 0,
+        new_jobs_in_preferred_location: 0,
+      },
+      activity: {
+        recent_applications: [],
+        recent_job_views: [],
+        upcoming_interviews: [],
+      },
+      recommendations: {
+        profile_improvement_tips: [],
+        job_matches: [],
       },
       charts: {
-        jobs_by_month: activityTimeline.map(activity => ({
-          month: activity.date,
-          count: activity.jobs_posted,
-        })),
-        applications_by_status: [
-          { status: "pending", count: pendingApplications.count || 0 },
-          { status: "accepted", count: 0 }, // This would need to be calculated
-          { status: "rejected", count: 0 }, // This would need to be calculated
-        ],
-        companies_by_industry: popularIndustries?.map(industry => ({
-          industry: industry.industry,
-          count: industry.count,
-        })) || [],
-        top_locations: [], // This would need to be implemented
+        applications_by_month: [],
+        applications_by_status: [],
+        job_views_by_day: [],
       },
     };
 
-    return {
-      success: true,
-      data: generalStats,
-    };
-  } catch (error) {
-    console.error("General stats error:", error);
-    if (error instanceof z.ZodError) {
-      return { success: false, error: ERROR_MESSAGES.VALIDATION.INVALID_FORMAT };
+    return { success: true, data: stats };
+  } catch {
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
+  }
+}
+
+async function getEmployerStats(profile: Profile): Promise<Result> {
+  const supabase = await createClient();
+
+  try {
+    // Get company for employer
+    const { data: company } = await supabase
+      .from("companies")
+      .select("*")
+      .eq("owner_id", profile.id)
+      .single();
+
+    if (!company) {
+      return { success: false, error: "Chưa có thông tin công ty" };
     }
-    return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+
+    // Get jobs posted by this company
+    const { data: jobs } = await supabase
+      .from("jobs")
+      .select("id, status, created_at")
+      .eq("company_id", company.id);
+
+    // Get applications for company jobs
+    const jobIds = jobs?.map(job => job.id) || [];
+    const { data: applications } = await supabase
+      .from("applications")
+      .select("id, status, applied_at")
+      .in("job_id", jobIds);
+
+    const totalJobs = jobs?.length || 0;
+    const activeJobs = jobs?.filter(job => job.status === "published").length || 0;
+    const draftJobs = jobs?.filter(job => job.status === "draft").length || 0;
+    const archivedJobs = jobs?.filter(job => job.status === "archived").length || 0;
+
+    const thisMonth = new Date();
+    thisMonth.setMonth(thisMonth.getMonth() - 1);
+    
+    const jobsThisMonth = jobs?.filter(job => 
+      new Date(job.created_at) > thisMonth
+    ).length || 0;
+
+    const applicationsThisMonth = applications?.filter(app => 
+      new Date(app.applied_at) > thisMonth
+    ).length || 0;
+
+    const pendingApplications = applications?.filter(app => 
+      app.status === "pending"
+    ).length || 0;
+
+    const stats: EmployerDashboardStats = {
+      company: {
+        id: company.id,
+        name: company.name,
+        is_verified: company.is_verified,
+        total_jobs_posted: totalJobs,
+        active_jobs: activeJobs,
+        draft_jobs: draftJobs,
+        archived_jobs: archivedJobs,
+        total_applications_received: applications?.length || 0,
+        profile_completion: 80,
+      },
+      hiring: {
+        jobs_posted_this_month: jobsThisMonth,
+        applications_this_month: applicationsThisMonth,
+        interviews_scheduled: 0,
+        hires_made: 0,
+        avg_applications_per_job: totalJobs > 0 ? Math.round((applications?.length || 0) / totalJobs) : 0,
+        avg_time_to_hire: 0,
+        fill_rate: 0,
+      },
+      applications: {
+        pending_applications: pendingApplications,
+        shortlisted_candidates: 0,
+        interviews_scheduled: 0,
+        offers_made: 0,
+        recent_applications: [],
+      },
+    };
+
+    return { success: true, data: stats };
+  } catch {
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
+  }
+}
+
+async function getAdminStats(): Promise<Result> {
+  const supabase = await createClient();
+
+  try {
+    // Get total counts
+    const [usersResult, jobsResult, companiesResult, applicationsResult] = await Promise.all([
+      supabase.from("profiles").select("id, role, created_at").eq("is_active", true),
+      supabase.from("jobs").select("id, status, created_at"),
+      supabase.from("companies").select("id, is_verified, created_at"),
+      supabase.from("applications").select("id, applied_at"),
+    ]);
+
+    const users = usersResult.data || [];
+    const jobs = jobsResult.data || [];
+    const companies = companiesResult.data || [];
+    const applications = applicationsResult.data || [];
+
+    const thisWeek = new Date();
+    thisWeek.setDate(thisWeek.getDate() - 7);
+
+    const newUsersThisWeek = users.filter(user => 
+      new Date(user.created_at) > thisWeek
+    ).length;
+
+    const pendingJobs = jobs.filter(job => job.status === "pending_approval").length;
+    const pendingCompanies = companies.filter(company => !company.is_verified).length;
+
+    const stats: AdminDashboardStats = {
+      overview: {
+        total_users: users.length,
+        total_jobs: jobs.length,
+        total_companies: companies.length,
+        total_applications: applications.length,
+        pending_verifications: pendingCompanies,
+        active_sessions: 0,
+        revenue_this_month: 0,
+        growth_rate: 0,
+      },
+      user_management: {
+        new_users_today: 0,
+        new_users_this_week: newUsersThisWeek,
+        new_users_this_month: 0,
+        active_job_seekers: users.filter(u => u.role === "job_seeker").length,
+        active_employers: users.filter(u => u.role === "employer").length,
+        inactive_users: 0,
+        users_by_role: [
+          { role: "job_seeker", count: users.filter(u => u.role === "job_seeker").length, percentage: 0 },
+          { role: "employer", count: users.filter(u => u.role === "employer").length, percentage: 0 },
+          { role: "admin", count: users.filter(u => u.role === "admin").length, percentage: 0 },
+        ],
+      },
+      content_moderation: {
+        pending_job_approvals: pendingJobs,
+        pending_company_verifications: pendingCompanies,
+        reported_content: 0,
+        flagged_applications: 0,
+        content_violations: 0,
+      },
+      system_health: {
+        platform_uptime: 99.9,
+        avg_response_time: 120,
+        error_rate: 0.1,
+        active_api_calls: 0,
+        storage_usage: 0,
+        bandwidth_usage: 0,
+      },
+      analytics: {
+        most_popular_industries: [],
+        top_hiring_companies: [],
+        geographic_distribution: [],
+        success_metrics: {
+          job_fill_rate: 0,
+          application_success_rate: 0,
+          user_retention_rate: 0,
+          avg_time_to_hire: 0,
+        },
+      },
+      trends: {
+        daily_signups: [],
+        job_posting_trends: [],
+        application_trends: [],
+        revenue_trends: [],
+      },
+      alerts: {
+        system_alerts: [],
+        security_alerts: [],
+      },
+    };
+
+    return { success: true, data: stats };
+  } catch {
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

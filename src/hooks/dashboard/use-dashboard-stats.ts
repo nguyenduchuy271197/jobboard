@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getStats } from "@/actions/dashboard/get-stats";
+import { getDashboardStats } from "@/actions/dashboard/get-stats";
 import { QUERY_KEYS } from "@/lib/query-keys";
 
 interface UseDashboardStatsParams {
@@ -12,7 +12,7 @@ interface UseDashboardStatsParams {
 export function useDashboardStats(params: UseDashboardStatsParams = {}) {
   return useQuery({
     queryKey: QUERY_KEYS.dashboard.generalStats(params),
-    queryFn: () => getStats(params),
+    queryFn: () => getDashboardStats(),
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 30, // 30 minutes
   });
