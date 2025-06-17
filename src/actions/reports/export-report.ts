@@ -10,13 +10,19 @@ import {
   CompanyReportItem,
   UserReportItem
 } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile, checkAdminAuth } from "@/lib/auth-utils";
 
 const schema = z.object({
-  report_type: z.enum(["applications", "jobs", "companies", "users"]),
-  format: z.enum(["csv", "json", "pdf"]),
+  report_type: z.enum(["applications", "jobs", "companies", "users"], {
+    errorMap: () => ({ message: "Loại báo cáo không hợp lệ" }),
+  }),
+  format: z.enum(["csv", "json", "pdf"], {
+    errorMap: () => ({ message: "Định dạng file không hợp lệ" }),
+  }),
   date_range: z.object({
-    start: z.string(),
-    end: z.string(),
+    start: z.string().refine(date => !isNaN(Date.parse(date)), "Ngày bắt đầu không hợp lệ"),
+    end: z.string().refine(date => !isNaN(Date.parse(date)), "Ngày kết thúc không hợp lệ"),
   }).optional(),
   filters: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   include_details: z.boolean().default(false),
@@ -33,18 +39,23 @@ export async function exportReport(
     // 1. Validate input
     const validatedParams = schema.parse(params);
 
-    // 2. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
+    // 2. Check authentication and get profile
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // 3. Date range setup
+    const { user, profile } = authCheck;
+
+    // 3. Check permissions for users report (admin only)
+    if (validatedParams.report_type === "users") {
+      const adminCheck = await checkAdminAuth();
+      if (!adminCheck.success) {
+        return { success: false, error: ERROR_MESSAGES.AUTH.ADMIN_ONLY };
+      }
+    }
+
+    // 4. Date range setup
     const now = new Date();
     const endDate = validatedParams.date_range?.end 
       ? new Date(validatedParams.date_range.end)
@@ -53,13 +64,16 @@ export async function exportReport(
       ? new Date(validatedParams.date_range.start)
       : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // 4. Get data based on report type
+    // 5. Get data based on report type
     let data: ReportDataItem[] = [];
     let fileName = "";
 
+    const supabase = await createClient();
+
     switch (validatedParams.report_type) {
       case "applications":
-        const { data: applications } = await supabase
+        // For employers, only show their company's applications
+        let applicationQuery = supabase
           .from("applications")
           .select(`
             id,
@@ -74,12 +88,31 @@ export async function exportReport(
           .lte("applied_at", endDate.toISOString())
           .order("applied_at", { ascending: false });
 
+        if (profile.role === "employer") {
+          const { data: userCompanies } = await supabase
+            .from("companies")
+            .select("id")
+            .eq("owner_id", user.id);
+          
+          if (userCompanies && userCompanies.length > 0) {
+            const companyIds = userCompanies.map(c => c.id);
+            applicationQuery = applicationQuery.in("jobs.company_id", companyIds);
+          } else {
+            return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
+          }
+        }
+
+        const { data: applications, error: appError } = await applicationQuery;
+        if (appError) {
+          return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+        }
+
         data = applications || [] as ApplicationReportItem[];
         fileName = `applications_report_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
         break;
 
       case "jobs":
-        const { data: jobs } = await supabase
+        let jobQuery = supabase
           .from("jobs")
           .select(`
             id,
@@ -102,47 +135,90 @@ export async function exportReport(
           .lte("created_at", endDate.toISOString())
           .order("created_at", { ascending: false });
 
+        // For employers, only show their company's jobs
+        if (profile.role === "employer") {
+          const { data: userCompanies } = await supabase
+            .from("companies")
+            .select("id")
+            .eq("owner_id", user.id);
+          
+          if (userCompanies && userCompanies.length > 0) {
+            const companyIds = userCompanies.map(c => c.id);
+            jobQuery = jobQuery.in("company_id", companyIds);
+          } else {
+            return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
+          }
+        }
+
+        const { data: jobs, error: jobError } = await jobQuery;
+        if (jobError) {
+          return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+        }
+
         data = jobs || [] as JobReportItem[];
         fileName = `jobs_report_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
         break;
 
       case "companies":
-        const { data: companies } = await supabase
-          .from("companies")
-          .select(`
-            id,
-            name,
-            description,
-            website_url,
-            size,
-            is_verified,
-            created_at,
-            updated_at,
-            industry:industries(name),
-            location:locations(name),
-            jobs(id)
-          `)
-          .gte("created_at", startDate.toISOString())
-          .lte("created_at", endDate.toISOString())
-          .order("created_at", { ascending: false });
+        // Only admin can access all companies report
+        if (profile.role === "employer") {
+          const { data: userCompanies, error: companyError } = await supabase
+            .from("companies")
+            .select(`
+              id,
+              name,
+              description,
+              website_url,
+              size,
+              is_verified,
+              created_at,
+              updated_at,
+              industry:industries(name),
+              location:locations(name),
+              jobs(id)
+            `)
+            .eq("owner_id", user.id)
+            .gte("created_at", startDate.toISOString())
+            .lte("created_at", endDate.toISOString())
+            .order("created_at", { ascending: false });
 
-        data = companies || [] as CompanyReportItem[];
+          if (companyError) {
+            return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+          }
+
+          data = userCompanies || [] as CompanyReportItem[];
+        } else {
+          const { data: companies, error: companyError } = await supabase
+            .from("companies")
+            .select(`
+              id,
+              name,
+              description,
+              website_url,
+              size,
+              is_verified,
+              created_at,
+              updated_at,
+              industry:industries(name),
+              location:locations(name),
+              jobs(id)
+            `)
+            .gte("created_at", startDate.toISOString())
+            .lte("created_at", endDate.toISOString())
+            .order("created_at", { ascending: false });
+
+          if (companyError) {
+            return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+          }
+
+          data = companies || [] as CompanyReportItem[];
+        }
+
         fileName = `companies_report_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
         break;
 
       case "users":
-        // Check admin permission
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-        if (profile?.role !== "admin") {
-          return { success: false, error: "Không có quyền truy cập báo cáo người dùng" };
-        }
-
-        const { data: users } = await supabase
+        const { data: users, error: userError } = await supabase
           .from("profiles")
           .select(`
             id,
@@ -159,18 +235,22 @@ export async function exportReport(
           .lte("created_at", endDate.toISOString())
           .order("created_at", { ascending: false });
 
+        if (userError) {
+          return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+        }
+
         data = users || [] as UserReportItem[];
         fileName = `users_report_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
         break;
     }
 
-    // 5. Apply additional filters if provided
+    // 6. Apply additional filters if provided
     if (validatedParams.filters) {
       // This would need to be implemented based on specific filter requirements
       // For now, we'll skip additional filtering
     }
 
-    // 6. Format data based on export format
+    // 7. Format data based on export format
     let fileContent = "";
     let mimeType = "";
 
@@ -209,7 +289,7 @@ export async function exportReport(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi xuất báo cáo" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 }
 

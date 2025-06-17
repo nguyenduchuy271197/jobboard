@@ -3,9 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Job } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const getJobsSchema = z.object({
-  search: z.string().optional(),
+  search: z.string().trim().optional(),
   company_id: z.number().int().positive().optional(),
   industry_id: z.number().int().positive().optional(),
   location_id: z.number().int().positive().optional(),
@@ -111,7 +112,7 @@ export async function getJobs(params?: GetJobsParams): Promise<Result> {
     const { data: jobs, error } = await query;
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return { success: true, data: jobs || [] };
@@ -119,6 +120,6 @@ export async function getJobs(params?: GetJobsParams): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy danh sách việc làm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

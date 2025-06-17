@@ -1,11 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { checkAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { DatabaseJob, DatabaseCompany } from "@/types/custom.types";
 
 const schema = z.object({
-  query: z.string().min(1, "Từ khóa tìm kiếm không được để trống"),
+  query: z.string().trim().min(1, "Từ khóa tìm kiếm không được để trống"),
   limit: z.number().min(1).max(100).optional().default(20),
   type: z.enum(["all", "jobs", "companies"]).optional().default("all"),
 });
@@ -26,25 +28,22 @@ type Result =
 
 export async function globalSearch(params: GlobalSearchParams): Promise<Result> {
   try {
+    // Step 1: Validate input
     const data = schema.parse(params);
-    const supabase = await createClient();
 
-    // Kiểm tra authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để tìm kiếm" };
+    // Step 2: Check authentication
+    const authCheck = await checkAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
+    const supabase = await createClient();
     const searchQuery = `%${data.query}%`;
     
     let jobs: DatabaseJob[] = [];
     let companies: DatabaseCompany[] = [];
 
-    // Tìm kiếm công việc
+    // Step 3: Search jobs
     if (data.type === "all" || data.type === "jobs") {
       const { data: jobsData, error: jobsError } = await supabase
         .from("jobs")
@@ -67,13 +66,13 @@ export async function globalSearch(params: GlobalSearchParams): Promise<Result> 
         .limit(data.type === "jobs" ? data.limit : Math.floor(data.limit / 2));
 
       if (jobsError) {
-        return { success: false, error: "Lỗi khi tìm kiếm công việc" };
+        return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
       }
 
       jobs = (jobsData || []) as DatabaseJob[];
     }
 
-    // Tìm kiếm công ty
+    // Step 4: Search companies
     if (data.type === "all" || data.type === "companies") {
       const { data: companiesData, error: companiesError } = await supabase
         .from("companies")
@@ -88,7 +87,7 @@ export async function globalSearch(params: GlobalSearchParams): Promise<Result> 
         .limit(data.type === "companies" ? data.limit : Math.floor(data.limit / 2));
 
       if (companiesError) {
-        return { success: false, error: "Lỗi khi tìm kiếm công ty" };
+        return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
       }
 
       companies = (companiesData || []) as DatabaseCompany[];
@@ -107,6 +106,6 @@ export async function globalSearch(params: GlobalSearchParams): Promise<Result> 
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống khi tìm kiếm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

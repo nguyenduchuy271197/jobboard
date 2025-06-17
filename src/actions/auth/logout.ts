@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 type Result = 
   | { success: true } 
@@ -8,18 +10,23 @@ type Result =
 
 export async function logoutUser(): Promise<Result> {
   try {
-    // 1. Create Supabase client
-    const supabase = await createClient();
+    // 1. Check authentication (optional but good practice)
+    const authCheck = await checkAuth();
+    if (!authCheck.success) {
+      // Already not authenticated, consider it a successful logout
+      return { success: true };
+    }
 
-    // 2. Sign out user
+    // 2. Create Supabase client and sign out
+    const supabase = await createClient();
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
     }
 
     return { success: true };
   } catch {
-    return { success: false, error: "Đã có lỗi xảy ra khi đăng xuất" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

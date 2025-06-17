@@ -1,7 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import type { UpdateUserRoleData } from "@/types/custom.types";
 
 const schema = z.object({
@@ -13,47 +15,35 @@ type Result = { success: true } | { success: false; error: string };
 
 export async function updateUserRole(params: UpdateUserRoleData): Promise<Result> {
   try {
+    // Step 1: Validate input
     const data = schema.parse(params);
 
+    // Step 2: Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    // Step 3: Prevent changing own role
+    if (data.user_id === authCheck.user.id) {
+      return { success: false, error: ERROR_MESSAGES.USER.CANNOT_CHANGE_OWN_ROLE };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
 
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền thực hiện thao tác này" };
-    }
-
-    // Không cho phép tự thay đổi role của chính mình
-    if (data.user_id === user.id) {
-      return { success: false, error: "Bạn không thể thay đổi vai trò của chính mình" };
-    }
-
-    // Kiểm tra user tồn tại
-    const { data: targetUser } = await supabase
+    // Step 4: Check if target user exists
+    const { data: targetUser, error: userError } = await supabase
       .from("profiles")
       .select("id, role")
       .eq("id", data.user_id)
       .single();
 
-    if (!targetUser) {
-      return { success: false, error: "Người dùng không tồn tại" };
+    if (userError || !targetUser) {
+      return { success: false, error: ERROR_MESSAGES.USER.NOT_FOUND };
     }
 
-    // Cập nhật role
-    const { error } = await supabase
+    // Step 5: Update user role
+    const { error: updateError } = await supabase
       .from("profiles")
       .update({ 
         role: data.role,
@@ -61,15 +51,15 @@ export async function updateUserRole(params: UpdateUserRoleData): Promise<Result
       })
       .eq("id", data.user_id);
 
-    if (error) {
-      return { success: false, error: "Không thể cập nhật vai trò người dùng" };
+    if (updateError) {
+      return { success: false, error: ERROR_MESSAGES.USER.UPDATE_FAILED };
     }
 
     return { success: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      return { success: false, error: ERROR_MESSAGES.VALIDATION.INVALID_ID };
     }
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

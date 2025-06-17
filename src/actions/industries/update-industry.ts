@@ -3,13 +3,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Industry, IndustryUpdateDto } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAdminAuth } from "@/lib/auth-utils";
 
 const updateIndustrySchema = z.object({
   id: z.number().int().positive("ID ngành nghề không hợp lệ"),
-  name: z.string().min(1, "Tên ngành nghề là bắt buộc").max(255, "Tên ngành nghề không được quá 255 ký tự").optional(),
-  description: z.string().max(1000, "Mô tả không được quá 1000 ký tự").optional(),
+  name: z.string().min(1, "Tên ngành nghề là bắt buộc").max(255, "Tên ngành nghề không được quá 255 ký tự").trim().optional(),
+  description: z.string().max(1000, "Mô tả không được quá 1000 ký tự").trim().optional(),
   slug: z.string().min(1, "Slug là bắt buộc").max(255, "Slug không được quá 255 ký tự")
-    .regex(/^[a-z0-9-]+$/, "Slug chỉ được chứa chữ thường, số và dấu gạch ngang").optional(),
+    .regex(/^[a-z0-9-]+$/, "Slug chỉ được chứa chữ thường, số và dấu gạch ngang").trim().optional(),
   is_active: z.boolean().optional(),
 });
 
@@ -23,48 +25,25 @@ export async function updateIndustry(params: UpdateIndustryParams): Promise<Resu
     // 1. Validate input
     const data = updateIndustrySchema.parse(params);
 
-    // 2. Create Supabase client and check auth
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    // 3. Check if industry exists
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    // 3. Check if current user is admin
-    const { data: currentUserProfile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) {
-      return { success: false, error: profileError.message };
-    }
-
-    if (currentUserProfile?.role !== "admin") {
-      return { success: false, error: "Chỉ admin mới có thể cập nhật ngành nghề" };
-    }
-
-    // 4. Check if industry exists
     const { data: existingIndustry, error: existsError } = await supabase
       .from("industries")
       .select("*")
       .eq("id", data.id)
       .single();
 
-    if (existsError) {
-      return { success: false, error: "Ngành nghề không tồn tại" };
+    if (existsError || !existingIndustry) {
+      return { success: false, error: ERROR_MESSAGES.INDUSTRY.NOT_FOUND };
     }
 
-    if (!existingIndustry) {
-      return { success: false, error: "Ngành nghề không tồn tại" };
-    }
-
-    // 5. Check if new name or slug conflicts with other industries
+    // 4. Check if new name or slug conflicts with other industries
     if (data.name || data.slug) {
       const conditions = [];
       if (data.name && data.name !== existingIndustry.name) {
@@ -83,16 +62,16 @@ export async function updateIndustry(params: UpdateIndustryParams): Promise<Resu
           .single();
 
         if (checkError && checkError.code !== "PGRST116") {
-          return { success: false, error: checkError.message };
+          return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
         }
 
         if (conflictIndustry) {
-          return { success: false, error: "Tên hoặc slug ngành nghề đã tồn tại" };
+          return { success: false, error: ERROR_MESSAGES.INDUSTRY.ALREADY_EXISTS };
         }
       }
     }
 
-    // 6. Update industry
+    // 5. Update industry
     const updateData: IndustryUpdateDto = {
       ...(data.name && { name: data.name }),
       ...(data.description !== undefined && { description: data.description }),
@@ -109,11 +88,11 @@ export async function updateIndustry(params: UpdateIndustryParams): Promise<Resu
       .single();
 
     if (updateError) {
-      return { success: false, error: updateError.message };
+      return { success: false, error: ERROR_MESSAGES.INDUSTRY.UPDATE_FAILED };
     }
 
     if (!updatedIndustry) {
-      return { success: false, error: "Không thể cập nhật ngành nghề" };
+      return { success: false, error: ERROR_MESSAGES.INDUSTRY.UPDATE_FAILED };
     }
 
     return { success: true, data: updatedIndustry };
@@ -121,6 +100,6 @@ export async function updateIndustry(params: UpdateIndustryParams): Promise<Resu
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi cập nhật ngành nghề" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

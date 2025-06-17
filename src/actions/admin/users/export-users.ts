@@ -1,7 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import type { ExportUsersData } from "@/types/custom.types";
 
 const schema = z.object({
@@ -28,30 +30,18 @@ type Result = {
 
 export async function exportUsers(params: ExportUsersData): Promise<Result> {
   try {
+    // Step 1: Validate input
     const data = schema.parse(params);
 
+    // Step 2: Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
 
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền thực hiện thao tác này" };
-    }
-
-    // Build query
+    // Step 3: Build query
     let query = supabase
       .from("profiles")
       .select(`
@@ -60,7 +50,7 @@ export async function exportUsers(params: ExportUsersData): Promise<Result> {
         companies(*)
       `);
 
-    // Apply filters
+    // Step 4: Apply filters
     if (!data.include_inactive) {
       query = query.eq("is_active", true);
     }
@@ -75,13 +65,14 @@ export async function exportUsers(params: ExportUsersData): Promise<Result> {
         .lte("created_at", data.date_range.end);
     }
 
+    // Step 5: Execute query
     const { data: users, error } = await query.order("created_at", { ascending: false });
 
     if (error || !users) {
-      return { success: false, error: "Không thể lấy dữ liệu người dùng" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
-    // Prepare export data
+    // Step 6: Prepare export data
     const exportData = users.map(user => ({
       id: user.id,
       email: user.email,
@@ -96,6 +87,7 @@ export async function exportUsers(params: ExportUsersData): Promise<Result> {
       has_job_seeker_profile: !!user.job_seeker_profile,
     }));
 
+    // Step 7: Format data based on requested format
     let content: string;
     let filename: string;
     let mimeType: string;
@@ -121,7 +113,7 @@ export async function exportUsers(params: ExportUsersData): Promise<Result> {
         mimeType = 'text/csv';
         break;
       default:
-        return { success: false, error: "Định dạng file không được hỗ trợ" };
+        return { success: false, error: ERROR_MESSAGES.VALIDATION.INVALID_FORMAT };
     }
 
     return {
@@ -136,7 +128,7 @@ export async function exportUsers(params: ExportUsersData): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 }
 

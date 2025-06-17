@@ -3,12 +3,24 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Job } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile, checkCompanyAccess } from "@/lib/auth-utils";
 
 const updateJobSchema = z.object({
   id: z.number().int().positive("ID việc làm không hợp lệ"),
-  title: z.string().min(1, "Tiêu đề việc làm không được để trống").max(255, "Tiêu đề không được quá 255 ký tự").optional(),
-  description: z.string().min(1, "Mô tả công việc không được để trống").optional(),
-  requirements: z.string().min(1, "Yêu cầu công việc không được để trống").optional(),
+  title: z.string()
+    .min(1, "Tiêu đề việc làm không được để trống")
+    .max(255, "Tiêu đề không được quá 255 ký tự")
+    .trim()
+    .optional(),
+  description: z.string()
+    .min(1, "Mô tả công việc không được để trống")
+    .trim()
+    .optional(),
+  requirements: z.string()
+    .min(1, "Yêu cầu công việc không được để trống")
+    .trim()
+    .optional(),
   industry_id: z.number().int().positive("ID ngành nghề không hợp lệ").optional(),
   location_id: z.number().int().positive("ID địa điểm không hợp lệ").optional(),
   employment_type: z.enum(["full_time", "part_time", "contract", "freelance", "internship"]).optional(),
@@ -38,15 +50,14 @@ export async function updateJob(params: UpdateJobParams): Promise<Result> {
     // 1. Validate input
     const data = updateJobSchema.parse(params);
 
-    // 2. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để cập nhật việc làm" };
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // 3. Check if job exists and user has permission
+    // 3. Check if job exists
+    const supabase = await createClient();
     const { data: existingJob, error: jobError } = await supabase
       .from("jobs")
       .select("id, company_id")
@@ -54,25 +65,16 @@ export async function updateJob(params: UpdateJobParams): Promise<Result> {
       .single();
 
     if (jobError || !existingJob) {
-      return { success: false, error: "Việc làm không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.JOB.NOT_FOUND };
     }
 
-    // Check company ownership
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .select("owner_id")
-      .eq("id", existingJob.company_id)
-      .single();
-
-    if (companyError || !company) {
-      return { success: false, error: "Công ty không tồn tại" };
+    // 4. Check company access
+    const companyCheck = await checkCompanyAccess(existingJob.company_id);
+    if (!companyCheck.success) {
+      return { success: false, error: companyCheck.error };
     }
 
-    if (company.owner_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền cập nhật việc làm này" };
-    }
-
-    // 4. Check if industry exists (if provided)
+    // 5. Validate industry exists (if provided)
     if (data.industry_id) {
       const { data: industry, error: industryError } = await supabase
         .from("industries")
@@ -85,7 +87,7 @@ export async function updateJob(params: UpdateJobParams): Promise<Result> {
       }
     }
 
-    // 5. Check if location exists (if provided)
+    // 6. Validate location exists (if provided)
     if (data.location_id) {
       const { data: location, error: locationError } = await supabase
         .from("locations")
@@ -98,7 +100,7 @@ export async function updateJob(params: UpdateJobParams): Promise<Result> {
       }
     }
 
-    // 6. Prepare update data (only include provided fields)
+    // 7. Prepare update data (only include provided fields)
     const updateData: Partial<{
       title: string;
       description: string;
@@ -127,7 +129,7 @@ export async function updateJob(params: UpdateJobParams): Promise<Result> {
     if (data.application_deadline !== undefined) updateData.application_deadline = data.application_deadline;
     if (data.status !== undefined) updateData.status = data.status;
 
-    // 7. Update job
+    // 8. Update job
     const { data: job, error } = await supabase
       .from("jobs")
       .update(updateData)
@@ -141,7 +143,7 @@ export async function updateJob(params: UpdateJobParams): Promise<Result> {
       .single();
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.JOB.UPDATE_FAILED };
     }
 
     return { success: true, data: job };
@@ -149,6 +151,6 @@ export async function updateJob(params: UpdateJobParams): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi cập nhật việc làm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

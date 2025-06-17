@@ -1,11 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 
 const schema = z.object({
-  company_id: z.number().positive(),
-  reason: z.string().min(1, "Lý do xóa là bắt buộc"),
+  company_id: z.number().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID),
+  reason: z.string().min(1, ERROR_MESSAGES.VALIDATION.REQUIRED_FIELD).transform(val => val.trim()),
 });
 
 type Result = 
@@ -19,45 +21,26 @@ export async function deleteCompany(
     // 1. Validate input
     const { company_id, reason } = schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
 
-    // 3. Check admin role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || profile?.role !== "admin") {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
-
-    // 4. Check if company exists and get related data
+    // 3. Check if company exists
     const { data: existingCompany, error: companyError } = await supabase
       .from("companies")
-      .select(`
-        id, 
-        name, 
-        owner_id,
-        jobs:jobs(count)
-      `)
+      .select("id, name, owner_id")
       .eq("id", company_id)
       .single();
 
     if (companyError || !existingCompany) {
-      return { success: false, error: "Không tìm thấy công ty" };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
     }
 
-    // 5. Check for active jobs
+    // 4. Check for active jobs
     const { data: activeJobs, error: jobsError } = await supabase
       .from("jobs")
       .select("id")
@@ -65,32 +48,45 @@ export async function deleteCompany(
       .eq("status", "published");
 
     if (jobsError) {
-      return { success: false, error: "Không thể kiểm tra việc làm của công ty" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (activeJobs && activeJobs.length > 0) {
-      return { success: false, error: "Không thể xóa công ty có việc làm đang hoạt động. Vui lòng đóng tất cả việc làm trước." };
+      return { 
+        success: false, 
+        error: `Không thể xóa công ty vì còn ${activeJobs.length} việc làm đang hoạt động. Vui lòng đóng tất cả việc làm trước.` 
+      };
+    }
+
+    // 5. Get job IDs for application check
+    const { data: companyJobs, error: companyJobsError } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("company_id", company_id);
+
+    if (companyJobsError) {
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     // 6. Check for pending applications
-    const { data: pendingApplications, error: applicationsError } = await supabase
-      .from("applications")
-      .select("id")
-      .in("job_id", 
-        await supabase
-          .from("jobs")
-          .select("id")
-          .eq("company_id", company_id)
-          .then(({ data }) => data?.map(job => job.id) || [])
-      )
-      .in("status", ["pending", "reviewing", "interviewing"]);
+    if (companyJobs && companyJobs.length > 0) {
+      const jobIds = companyJobs.map(job => job.id);
+      const { data: pendingApplications, error: applicationsError } = await supabase
+        .from("applications")
+        .select("id")
+        .in("job_id", jobIds)
+        .in("status", ["pending", "reviewing", "interviewing"]);
 
-    if (applicationsError) {
-      return { success: false, error: "Không thể kiểm tra đơn ứng tuyển" };
-    }
+      if (applicationsError) {
+        return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+      }
 
-    if (pendingApplications && pendingApplications.length > 0) {
-      return { success: false, error: "Không thể xóa công ty có đơn ứng tuyển đang chờ xử lý. Vui lòng xử lý tất cả đơn ứng tuyển trước." };
+      if (pendingApplications && pendingApplications.length > 0) {
+        return { 
+          success: false, 
+          error: `Không thể xóa công ty vì còn ${pendingApplications.length} đơn ứng tuyển đang chờ xử lý. Vui lòng xử lý tất cả đơn ứng tuyển trước.` 
+        };
+      }
     }
 
     // 7. Delete company (cascade will handle related records)
@@ -100,7 +96,7 @@ export async function deleteCompany(
       .eq("id", company_id);
 
     if (deleteError) {
-      return { success: false, error: "Không thể xóa công ty" };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.DELETE_FAILED };
     }
 
     // TODO: Send notification email to company owner
@@ -112,6 +108,6 @@ export async function deleteCompany(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -22,10 +22,10 @@ export * from "./job-seeker-profiles";
 // Job application management actions
 export * from "./job-applications";
 
-// Admin actions
+// Admin actions - Companies
 export {
   getAllCompanies,
-  verifyCompany,
+  verifyCompany as verifyCompanyAdmin,
   rejectCompany,
   deleteCompany as deleteCompanyAdmin,
   getPendingCompanies,
@@ -33,23 +33,21 @@ export {
   exportCompanies,
 } from "./admin/companies";
 
-export { getAllJobs } from "./admin/jobs/get-all-jobs";
-export { getPendingJobs } from "./admin/jobs/get-pending-jobs";
-export { getJobStatistics } from "./admin/jobs/get-job-statistics";
-export { bulkUpdateJobs } from "./admin/jobs/bulk-update-jobs";
-export { exportJobs } from "./admin/jobs/export-jobs";
-export { rejectJob } from "./admin/jobs/reject-job";
-export { approveJob } from "./admin/jobs/approve-job";
-export { deleteJob as deleteJobAdmin } from "./admin/jobs/delete-job";
-export { archiveJob } from "./admin/jobs/archive-job";
+// Admin actions - Jobs
+export {
+  getAllJobs as getAllJobsAdmin,
+  getPendingJobs,
+  getJobStatistics,
+  bulkUpdateJobs,
+  exportJobs,
+  rejectJob,
+  approveJob,
+  deleteJob as deleteJobAdmin,
+  archiveJob,
+} from "./admin/jobs";
 
-export { getUserDetails } from "./admin/users/get-user-details";
-export { updateUserRole } from "./admin/users/update-user-role";
-export { getUserStatistics } from "./admin/users/get-user-statistics";
-export { exportUsers } from "./admin/users/export-users";
-export { activateUser } from "./admin/users/activate-user";
-export { deactivateUser } from "./admin/users/deactivate-user";
-export { getAllUsers } from "./admin/users/get-all-users";
+// Admin actions - Users
+export * from "./admin/users";
 
 // Dashboard actions
 export * from "./dashboard";

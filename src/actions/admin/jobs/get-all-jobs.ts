@@ -1,11 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import type { DatabaseJob, AdminJobsFilter } from "@/types/custom.types";
 
 const schema = z.object({
-  search: z.string().optional(),
+  search: z.string().optional().transform(val => val?.trim()),
   status: z.enum(["draft", "pending_approval", "published", "closed", "archived"]).optional(),
   company_id: z.number().optional(),
   industry_id: z.number().optional(),
@@ -30,28 +32,16 @@ type Result = {
 
 export async function getAllJobs(params?: AdminJobsFilter): Promise<Result> {
   try {
+    // 1. Validate input
     const data = params ? schema.parse(params) : { limit: 20, offset: 0 };
 
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền truy cập chức năng này" };
-    }
 
     // Build query
     let query = supabase
@@ -94,7 +84,7 @@ export async function getAllJobs(params?: AdminJobsFilter): Promise<Result> {
       .range(data?.offset || 0, (data?.offset || 0) + (data?.limit || 20) - 1);
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     const total = count || 0;
@@ -112,6 +102,6 @@ export async function getAllJobs(params?: AdminJobsFilter): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy danh sách việc làm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

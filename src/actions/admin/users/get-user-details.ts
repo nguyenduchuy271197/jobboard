@@ -1,7 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import type { AdminUserDetails } from "@/types/custom.types";
 
 const schema = z.object({
@@ -18,30 +20,18 @@ type Result = {
 
 export async function getUserDetails(params: { user_id: string }): Promise<Result> {
   try {
+    // Step 1: Validate input
     const data = schema.parse(params);
 
+    // Step 2: Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
 
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền truy cập chức năng này" };
-    }
-
-    // Lấy thông tin user với tất cả relations
+    // Step 3: Get user details with all relations
     const { data: userDetails, error } = await supabase
       .from("profiles")
       .select(`
@@ -58,14 +48,14 @@ export async function getUserDetails(params: { user_id: string }): Promise<Resul
       .single();
 
     if (error) {
-      return { success: false, error: "Không tìm thấy thông tin người dùng" };
+      return { success: false, error: ERROR_MESSAGES.USER.NOT_FOUND };
     }
 
     if (!userDetails) {
-      return { success: false, error: "Người dùng không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.USER.NOT_FOUND };
     }
 
-    // Format dữ liệu trả về
+    // Step 4: Format response data
     const result: AdminUserDetails = {
       ...userDetails,
       jobs_count: Array.isArray(userDetails.jobs_count) ? userDetails.jobs_count.length : 0,
@@ -79,8 +69,8 @@ export async function getUserDetails(params: { user_id: string }): Promise<Resul
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      return { success: false, error: ERROR_MESSAGES.VALIDATION.INVALID_ID };
     }
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

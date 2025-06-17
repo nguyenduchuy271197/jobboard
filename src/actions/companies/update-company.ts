@@ -1,18 +1,20 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAuthWithProfile, checkCompanyAccess } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import { Company } from "@/types/custom.types";
 
 const updateCompanySchema = z.object({
-  id: z.number().int().positive("ID công ty không hợp lệ"),
-  name: z.string().min(1, "Tên công ty không được để trống").max(255, "Tên công ty không được quá 255 ký tự").optional(),
-  description: z.string().optional(),
-  website_url: z.string().url("URL website không hợp lệ").optional().or(z.literal("")),
-  industry_id: z.number().int().positive("ID ngành nghề không hợp lệ").optional(),
-  location_id: z.number().int().positive("ID địa điểm không hợp lệ").optional(),
+  id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID),
+  name: z.string().min(1, ERROR_MESSAGES.VALIDATION.REQUIRED_FIELD).max(255, "Tên công ty không được quá 255 ký tự").transform(val => val.trim()).optional(),
+  description: z.string().optional().transform(val => val?.trim()),
+  website_url: z.string().url(ERROR_MESSAGES.VALIDATION.INVALID_URL).optional().or(z.literal("")).transform(val => val?.trim()),
+  industry_id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID).optional(),
+  location_id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID).optional(),
   size: z.enum(["startup", "small", "medium", "large", "enterprise"]).optional(),
-  address: z.string().optional(),
+  address: z.string().optional().transform(val => val?.trim()),
   founded_year: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
   employee_count: z.number().int().min(0).optional(),
 });
@@ -27,30 +29,20 @@ export async function updateCompany(params: UpdateCompanyParams): Promise<Result
     // 1. Validate input
     const data = updateCompanySchema.parse(params);
 
-    // 2. Create Supabase client and get user
+    // 2. Check authentication and company access
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const accessCheck = await checkCompanyAccess(data.id);
+    if (!accessCheck.success) {
+      return { success: false, error: accessCheck.error };
+    }
+
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để cập nhật công ty" };
-    }
-
-    // 3. Check if company exists and user has permission
-    const { data: existingCompany, error: companyError } = await supabase
-      .from("companies")
-      .select("id, owner_id")
-      .eq("id", data.id)
-      .single();
-
-    if (companyError || !existingCompany) {
-      return { success: false, error: "Công ty không tồn tại" };
-    }
-
-    if (existingCompany.owner_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền cập nhật công ty này" };
-    }
-
-    // 4. Check if industry exists (if provided)
+    // 3. Check if industry exists (if provided)
     if (data.industry_id) {
       const { data: industry, error: industryError } = await supabase
         .from("industries")
@@ -59,11 +51,11 @@ export async function updateCompany(params: UpdateCompanyParams): Promise<Result
         .single();
 
       if (industryError || !industry) {
-        return { success: false, error: "Ngành nghề không tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.INDUSTRY.NOT_FOUND };
       }
     }
 
-    // 5. Check if location exists (if provided)
+    // 4. Check if location exists (if provided)
     if (data.location_id) {
       const { data: location, error: locationError } = await supabase
         .from("locations")
@@ -72,11 +64,11 @@ export async function updateCompany(params: UpdateCompanyParams): Promise<Result
         .single();
 
       if (locationError || !location) {
-        return { success: false, error: "Địa điểm không tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.LOCATION.NOT_FOUND };
       }
     }
 
-    // 6. Prepare update data (only include provided fields)
+    // 5. Prepare update data (only include provided fields)
     const updateData: Partial<{
       name: string;
       description: string | null;
@@ -99,7 +91,7 @@ export async function updateCompany(params: UpdateCompanyParams): Promise<Result
     if (data.founded_year !== undefined) updateData.founded_year = data.founded_year;
     if (data.employee_count !== undefined) updateData.employee_count = data.employee_count;
 
-    // 7. Update company
+    // 6. Update company
     const { data: company, error } = await supabase
       .from("companies")
       .update(updateData)
@@ -114,9 +106,9 @@ export async function updateCompany(params: UpdateCompanyParams): Promise<Result
 
     if (error) {
       if (error.code === "23505") {
-        return { success: false, error: "Tên công ty đã tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.COMPANY.ALREADY_EXISTS };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.UPDATE_FAILED };
     }
 
     return { success: true, data: company };
@@ -124,6 +116,6 @@ export async function updateCompany(params: UpdateCompanyParams): Promise<Result
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi cập nhật công ty" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

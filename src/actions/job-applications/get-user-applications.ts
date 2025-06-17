@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import type { DatabaseJobApplication } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 export async function getUserApplications(): Promise<{ 
   success: true; 
@@ -11,13 +13,16 @@ export async function getUserApplications(): Promise<{
   error: string 
 }> {
   try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
+    // 1. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
+    const { user } = authCheck;
+
+    // 2. Fetch user applications
+    const supabase = await createClient();
     const { data: applications, error } = await supabase
       .from("applications")
       .select(`
@@ -42,16 +47,14 @@ export async function getUserApplications(): Promise<{
       .order("applied_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching user applications:", error);
-      return { success: false, error: "Không thể tải danh sách hồ sơ ứng tuyển của bạn" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return {
       success: true,
       data: applications || [],
     };
-  } catch (error) {
-    console.error("Error in getUserApplications:", error);
-    return { success: false, error: "Lỗi hệ thống" };
+  } catch {
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

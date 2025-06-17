@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const uploadResumeSchema = z.object({
   formData: z.instanceof(FormData),
@@ -19,7 +21,7 @@ export async function uploadResume(params: UploadResumeParams): Promise<Result> 
     const file = data.formData.get('resume') as File;
 
     if (!file) {
-      return { success: false, error: "Không có file được chọn" };
+      return { success: false, error: ERROR_MESSAGES.FILE.NOT_FOUND };
     }
 
     // 2. Validate file type and size
@@ -35,18 +37,19 @@ export async function uploadResume(params: UploadResumeParams): Promise<Result> 
 
     // 5MB limit
     if (file.size > 5 * 1024 * 1024) {
-      return { success: false, error: "File không được vượt quá 5MB" };
+      return { success: false, error: ERROR_MESSAGES.FILE.TOO_LARGE };
     }
 
-    // 3. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để upload resume" };
+    // 3. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
+
+    const { user } = authCheck;
 
     // 4. Check if profile exists
+    const supabase = await createClient();
     const { data: existingProfile, error: profileError } = await supabase
       .from("job_seeker_profiles")
       .select("user_id, cv_file_path")
@@ -81,7 +84,7 @@ export async function uploadResume(params: UploadResumeParams): Promise<Result> 
       });
 
     if (uploadError) {
-      return { success: false, error: uploadError.message };
+      return { success: false, error: ERROR_MESSAGES.FILE.UPLOAD_FAILED };
     }
 
     // 8. Update profile with CV file path
@@ -96,7 +99,7 @@ export async function uploadResume(params: UploadResumeParams): Promise<Result> 
         .from('cvs')
         .remove([uploadData.path]);
       
-      return { success: false, error: updateError.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return { success: true, data: { cv_file_path: uploadData.path } };
@@ -104,6 +107,6 @@ export async function uploadResume(params: UploadResumeParams): Promise<Result> 
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi upload resume" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

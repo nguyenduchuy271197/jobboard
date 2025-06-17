@@ -1,11 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import type { AdminUsersFilter, Profile } from "@/types/custom.types";
 
 const schema = z.object({
-  search: z.string().optional(),
+  search: z.string().trim().optional(),
   role: z.enum(["job_seeker", "employer", "admin"]).optional(),
   is_active: z.boolean().optional(),
   created_after: z.string().optional(),
@@ -28,35 +30,23 @@ type Result = {
 
 export async function getAllUsers(params: AdminUsersFilter): Promise<Result> {
   try {
+    // Step 1: Validate input
     const data = schema.parse(params);
 
+    // Step 2: Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
 
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền truy cập chức năng này" };
-    }
-
-    // Build query
+    // Step 3: Build query
     let query = supabase
       .from("profiles")
       .select("*", { count: "exact" });
 
-    // Apply filters
+    // Step 4: Apply filters
     if (data.search) {
       query = query.or(`full_name.ilike.%${data.search}%,email.ilike.%${data.search}%`);
     }
@@ -77,7 +67,7 @@ export async function getAllUsers(params: AdminUsersFilter): Promise<Result> {
       query = query.lte("created_at", data.created_before);
     }
 
-    // Add pagination and ordering
+    // Step 5: Execute query with pagination
     query = query
       .order("created_at", { ascending: false })
       .range(data.offset, data.offset + data.limit - 1);
@@ -85,7 +75,7 @@ export async function getAllUsers(params: AdminUsersFilter): Promise<Result> {
     const { data: users, error, count } = await query;
 
     if (error) {
-      return { success: false, error: "Không thể lấy danh sách người dùng" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return {
@@ -100,6 +90,6 @@ export async function getAllUsers(params: AdminUsersFilter): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

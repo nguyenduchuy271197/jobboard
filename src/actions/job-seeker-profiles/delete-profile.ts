@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 type Result = 
   | { success: true; data: { user_id: string } } 
@@ -8,15 +10,16 @@ type Result =
 
 export async function deleteJobSeekerProfile(): Promise<Result> {
   try {
-    // 1. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để xóa hồ sơ" };
+    // 1. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
+    const { user } = authCheck;
+
     // 2. Check if profile exists
+    const supabase = await createClient();
     const { data: existingProfile, error: profileError } = await supabase
       .from("job_seeker_profiles")
       .select("user_id, cv_file_path")
@@ -34,7 +37,7 @@ export async function deleteJobSeekerProfile(): Promise<Result> {
       .eq("applicant_id", user.id);
 
     if (applicationError) {
-      return { success: false, error: "Lỗi khi kiểm tra đơn ứng tuyển liên quan" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (applicationCount && applicationCount > 0) {
@@ -61,11 +64,11 @@ export async function deleteJobSeekerProfile(): Promise<Result> {
       .eq("user_id", user.id);
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: "Không thể xóa hồ sơ ứng viên" };
     }
 
     return { success: true, data: { user_id: user.id } };
   } catch {
-    return { success: false, error: "Đã có lỗi xảy ra khi xóa hồ sơ ứng viên" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const deleteFileSchema = z.object({
   bucket: z.enum(["cvs", "company-logos", "avatars"]),
-  path: z.string().min(1, "Đường dẫn file không được để trống"),
+  path: z.string().min(1, "Đường dẫn file không được để trống").trim(),
 });
 
 type DeleteFileResult = 
@@ -16,58 +18,61 @@ export async function deleteFile(
   params: z.infer<typeof deleteFileSchema>
 ): Promise<DeleteFileResult> {
   try {
-    // Validate input
+    // 1. Validate input
     const validatedData = deleteFileSchema.parse(params);
 
-    // Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để xóa file" };
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // Check if user has permission to delete this file
+    const { user, profile } = authCheck;
+
+    // 3. Check permissions based on bucket type
     const pathParts = validatedData.path.split("/");
     const fileOwnerId = pathParts[0];
 
     if (validatedData.bucket === "cvs" || validatedData.bucket === "avatars") {
       // For CVs and avatars, only the owner can delete
       if (fileOwnerId !== user.id) {
-        return { success: false, error: "Bạn không có quyền xóa file này" };
+        return { success: false, error: ERROR_MESSAGES.FILE.DELETE_FAILED };
       }
     } else if (validatedData.bucket === "company-logos") {
-      // For company logos, check if user owns the company
-      const companyId = parseInt(fileOwnerId, 10);
-      if (isNaN(companyId)) {
-        return { success: false, error: "ID công ty không hợp lệ" };
-      }
-      
-      const { data: company, error: companyError } = await supabase
-        .from("companies")
-        .select("owner_id")
-        .eq("id", companyId)
-        .single();
+      // For company logos, check if user owns the company or is admin
+      if (profile.role === "admin") {
+        // Admin can delete any file
+      } else {
+        const companyId = parseInt(fileOwnerId, 10);
+        if (isNaN(companyId)) {
+          return { success: false, error: "ID công ty không hợp lệ" };
+        }
+        
+        const supabase = await createClient();
+        const { data: company, error: companyError } = await supabase
+          .from("companies")
+          .select("owner_id")
+          .eq("id", companyId)
+          .single();
 
-      if (companyError || !company) {
-        return { success: false, error: "Không tìm thấy công ty" };
-      }
+        if (companyError || !company) {
+          return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
+        }
 
-      if (company.owner_id !== user.id) {
-        return { success: false, error: "Bạn không có quyền xóa logo của công ty này" };
+        if (company.owner_id !== user.id) {
+          return { success: false, error: ERROR_MESSAGES.FILE.DELETE_FAILED };
+        }
       }
     }
 
-    // Delete file from storage
+    // 4. Delete file from storage
+    const supabase = await createClient();
     const { error: deleteError } = await supabase.storage
       .from(validatedData.bucket)
       .remove([validatedData.path]);
 
     if (deleteError) {
-      return { success: false, error: `Lỗi xóa file: ${deleteError.message}` };
+      return { success: false, error: ERROR_MESSAGES.FILE.DELETE_FAILED };
     }
 
     return {
@@ -78,6 +83,6 @@ export async function deleteFile(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi xóa file" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

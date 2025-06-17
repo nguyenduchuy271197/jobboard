@@ -2,11 +2,13 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const uploadFileSchema = z.object({
   bucket: z.enum(["cvs", "company-logos", "avatars"]),
-  folder: z.string().optional(),
-  filename: z.string().optional(),
+  folder: z.string().trim().optional(),
+  filename: z.string().trim().optional(),
 });
 
 type UploadFileResult = 
@@ -17,14 +19,14 @@ export async function uploadFile(
   formData: FormData
 ): Promise<UploadFileResult> {
   try {
-    // Validate form data
+    // 1. Validate form data
     const bucket = formData.get("bucket") as string;
     const folder = formData.get("folder") as string | null;
     const filename = formData.get("filename") as string | null;
     const file = formData.get("file") as File;
 
     if (!file) {
-      return { success: false, error: "File không được để trống" };
+      return { success: false, error: ERROR_MESSAGES.FILE.NOT_FOUND };
     }
 
     const validatedData = uploadFileSchema.parse({
@@ -33,18 +35,15 @@ export async function uploadFile(
       filename: filename || undefined,
     });
 
-    // Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để upload file" };
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // Check file size limits based on bucket
+    const { user } = authCheck;
+
+    // 3. Check file size limits based on bucket
     const fileSizeLimits = {
       cvs: 50 * 1024 * 1024, // 50MB
       "company-logos": 10 * 1024 * 1024, // 10MB
@@ -54,11 +53,11 @@ export async function uploadFile(
     if (file.size > fileSizeLimits[validatedData.bucket]) {
       return { 
         success: false, 
-        error: `File quá lớn. Kích thước tối đa cho ${validatedData.bucket} là ${fileSizeLimits[validatedData.bucket] / (1024 * 1024)}MB` 
+        error: ERROR_MESSAGES.FILE.TOO_LARGE
       };
     }
 
-    // Check file type based on bucket
+    // 4. Check file type based on bucket
     const allowedMimeTypes = {
       cvs: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
       "company-logos": ["image/jpeg", "image/png", "image/webp", "image/svg+xml"],
@@ -68,11 +67,11 @@ export async function uploadFile(
     if (!allowedMimeTypes[validatedData.bucket].includes(file.type)) {
       return { 
         success: false, 
-        error: `Loại file không được hỗ trợ cho ${validatedData.bucket}. Chỉ chấp nhận: ${allowedMimeTypes[validatedData.bucket].join(", ")}` 
+        error: ERROR_MESSAGES.FILE.INVALID_TYPE
       };
     }
 
-    // Generate file path
+    // 5. Generate file path
     const timestamp = Date.now();
     const fileExtension = file.name.split(".").pop();
     const baseFilename = validatedData.filename || `${timestamp}`;
@@ -90,7 +89,8 @@ export async function uploadFile(
       filePath = validatedData.folder ? `${validatedData.folder}/${finalFilename}` : finalFilename;
     }
 
-    // Upload file to storage
+    // 6. Upload file to storage
+    const supabase = await createClient();
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(validatedData.bucket)
       .upload(filePath, file, {
@@ -99,12 +99,13 @@ export async function uploadFile(
       });
 
     if (uploadError) {
-      return { success: false, error: `Lỗi upload file: ${uploadError.message}` };
+      return { success: false, error: ERROR_MESSAGES.FILE.UPLOAD_FAILED };
     }
 
-    // Get public URL for public buckets
+    // 7. Get URL based on bucket type
     let publicUrl = "";
     if (validatedData.bucket === "company-logos" || validatedData.bucket === "avatars") {
+      // Public buckets - get public URL
       const { data: urlData } = supabase.storage
         .from(validatedData.bucket)
         .getPublicUrl(uploadData.path);
@@ -116,7 +117,7 @@ export async function uploadFile(
         .createSignedUrl(uploadData.path, 3600); // 1 hour expiry
 
       if (urlError) {
-        return { success: false, error: `Lỗi tạo URL file: ${urlError.message}` };
+        return { success: false, error: ERROR_MESSAGES.FILE.UPLOAD_FAILED };
       }
       publicUrl = urlData.signedUrl;
     }
@@ -132,6 +133,6 @@ export async function uploadFile(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi upload file" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

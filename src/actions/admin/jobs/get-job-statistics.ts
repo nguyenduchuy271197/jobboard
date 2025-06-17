@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import type { JobStatistics } from "@/types/custom.types";
 
 type Result = { 
@@ -13,26 +15,13 @@ type Result = {
 
 export async function getJobStatistics(): Promise<Result> {
   try {
+    // 1. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền truy cập chức năng này" };
-    }
 
     // Lấy tất cả jobs
     const { data: allJobs } = await supabase
@@ -45,7 +34,7 @@ export async function getJobStatistics(): Promise<Result> {
       `);
 
     if (!allJobs) {
-      return { success: false, error: "Không thể lấy dữ liệu thống kê" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     const now = new Date();
@@ -157,6 +146,6 @@ export async function getJobStatistics(): Promise<Result> {
       data: statistics,
     };
   } catch {
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

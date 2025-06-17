@@ -1,17 +1,19 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import { Company } from "@/types/custom.types";
 
 const createCompanySchema = z.object({
-  name: z.string().min(1, "Tên công ty không được để trống").max(255, "Tên công ty không được quá 255 ký tự"),
-  description: z.string().optional(),
-  website_url: z.string().url("URL website không hợp lệ").optional().or(z.literal("")),
-  industry_id: z.number().int().positive("ID ngành nghề không hợp lệ").optional(),
-  location_id: z.number().int().positive("ID địa điểm không hợp lệ").optional(),
+  name: z.string().min(1, ERROR_MESSAGES.VALIDATION.REQUIRED_FIELD).max(255, "Tên công ty không được quá 255 ký tự").transform(val => val.trim()),
+  description: z.string().optional().transform(val => val?.trim()),
+  website_url: z.string().url(ERROR_MESSAGES.VALIDATION.INVALID_URL).optional().or(z.literal("")).transform(val => val?.trim()),
+  industry_id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID).optional(),
+  location_id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID).optional(),
   size: z.enum(["startup", "small", "medium", "large", "enterprise"]).optional(),
-  address: z.string().optional(),
+  address: z.string().optional().transform(val => val?.trim()),
   founded_year: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
   employee_count: z.number().int().min(0).optional(),
 });
@@ -26,13 +28,14 @@ export async function createCompany(params: CreateCompanyParams): Promise<Result
     // 1. Validate input
     const data = createCompanySchema.parse(params);
 
-    // 2. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để tạo công ty" };
+    // 2. Check authentication and get profile
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
+
+    const { user } = authCheck;
+    const supabase = await createClient();
 
     // 3. Check if industry exists (if provided)
     if (data.industry_id) {
@@ -43,7 +46,7 @@ export async function createCompany(params: CreateCompanyParams): Promise<Result
         .single();
 
       if (industryError || !industry) {
-        return { success: false, error: "Ngành nghề không tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.INDUSTRY.NOT_FOUND };
       }
     }
 
@@ -56,7 +59,7 @@ export async function createCompany(params: CreateCompanyParams): Promise<Result
         .single();
 
       if (locationError || !location) {
-        return { success: false, error: "Địa điểm không tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.LOCATION.NOT_FOUND };
       }
     }
 
@@ -86,9 +89,9 @@ export async function createCompany(params: CreateCompanyParams): Promise<Result
 
     if (error) {
       if (error.code === "23505") {
-        return { success: false, error: "Tên công ty đã tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.COMPANY.ALREADY_EXISTS };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.CREATE_FAILED };
     }
 
     return { success: true, data: company };
@@ -96,6 +99,6 @@ export async function createCompany(params: CreateCompanyParams): Promise<Result
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi tạo công ty" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import { Company } from "@/types/custom.types";
 
@@ -19,13 +21,14 @@ export async function getUserCompanies(params?: GetUserCompaniesParams): Promise
     // 1. Validate input
     const data = getUserCompaniesSchema?.parse(params) || {};
 
-    // 2. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để xem công ty của mình" };
+    // 2. Check authentication and get profile
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
+
+    const { user } = authCheck;
+    const supabase = await createClient();
 
     // 3. Build query
     let query = supabase
@@ -50,7 +53,7 @@ export async function getUserCompanies(params?: GetUserCompaniesParams): Promise
     const { data: companies, error } = await query;
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return { success: true, data: companies || [] };
@@ -58,6 +61,6 @@ export async function getUserCompanies(params?: GetUserCompaniesParams): Promise
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy danh sách công ty của bạn" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

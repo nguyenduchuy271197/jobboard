@@ -1,10 +1,12 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAuthWithProfile, checkCompanyAccess } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 
 const deleteCompanySchema = z.object({
-  id: z.number().int().positive("ID công ty không hợp lệ"),
+  id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID),
 });
 
 type DeleteCompanyParams = z.infer<typeof deleteCompanySchema>;
@@ -17,27 +19,28 @@ export async function deleteCompany(params: DeleteCompanyParams): Promise<Result
     // 1. Validate input
     const data = deleteCompanySchema.parse(params);
 
-    // 2. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để xóa công ty" };
+    // 2. Check authentication and company access
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // 3. Check if company exists and user has permission
+    const accessCheck = await checkCompanyAccess(data.id);
+    if (!accessCheck.success) {
+      return { success: false, error: accessCheck.error };
+    }
+
+    const supabase = await createClient();
+
+    // 3. Get company details for cleanup
     const { data: existingCompany, error: companyError } = await supabase
       .from("companies")
-      .select("id, owner_id, name, logo_url")
+      .select("id, logo_url")
       .eq("id", data.id)
       .single();
 
     if (companyError || !existingCompany) {
-      return { success: false, error: "Công ty không tồn tại" };
-    }
-
-    if (existingCompany.owner_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền xóa công ty này" };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
     }
 
     // 4. Check for dependencies (jobs using this company)
@@ -47,7 +50,7 @@ export async function deleteCompany(params: DeleteCompanyParams): Promise<Result
       .eq("company_id", data.id);
 
     if (jobError) {
-      return { success: false, error: "Lỗi khi kiểm tra jobs liên quan" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (jobCount && jobCount > 0) {
@@ -74,7 +77,7 @@ export async function deleteCompany(params: DeleteCompanyParams): Promise<Result
       .eq("id", data.id);
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.DELETE_FAILED };
     }
 
     return { success: true, data: { id: data.id } };
@@ -82,6 +85,6 @@ export async function deleteCompany(params: DeleteCompanyParams): Promise<Result
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi xóa công ty" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

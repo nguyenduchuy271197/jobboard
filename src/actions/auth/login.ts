@@ -1,12 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import { AuthUser, AuthSession } from "@/types/custom.types";
 
 const loginSchema = z.object({
-  email: z.string().email("Email không hợp lệ"),
-  password: z.string().min(1, "Mật khẩu là bắt buộc"),
+  email: z.string().email(ERROR_MESSAGES.VALIDATION.INVALID_EMAIL).transform(val => val.trim().toLowerCase()),
+  password: z.string().min(1, ERROR_MESSAGES.VALIDATION.REQUIRED_FIELD),
 });
 
 type LoginParams = z.infer<typeof loginSchema>;
@@ -29,11 +30,18 @@ export async function loginUser(params: LoginParams): Promise<Result> {
     });
 
     if (authError) {
-      return { success: false, error: authError.message };
+      // Map common auth errors to user-friendly messages
+      if (authError.message.includes("Invalid login credentials")) {
+        return { success: false, error: ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS };
+      }
+      if (authError.message.includes("Email not confirmed")) {
+        return { success: false, error: ERROR_MESSAGES.AUTH.EMAIL_NOT_VERIFIED };
+      }
+      return { success: false, error: ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS };
     }
 
     if (!authData.user || !authData.session) {
-      return { success: false, error: "Đăng nhập không thành công" };
+      return { success: false, error: ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS };
     }
 
     // 4. Update last sign in time in profile
@@ -58,6 +66,6 @@ export async function loginUser(params: LoginParams): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi đăng nhập" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

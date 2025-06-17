@@ -3,12 +3,21 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Job } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile, checkCompanyAccess } from "@/lib/auth-utils";
 
 const createJobSchema = z.object({
   company_id: z.number().int().positive("ID công ty không hợp lệ"),
-  title: z.string().min(1, "Tiêu đề việc làm không được để trống").max(255, "Tiêu đề không được quá 255 ký tự"),
-  description: z.string().min(1, "Mô tả công việc không được để trống"),
-  requirements: z.string().min(1, "Yêu cầu công việc không được để trống"),
+  title: z.string()
+    .min(1, "Tiêu đề việc làm không được để trống")
+    .max(255, "Tiêu đề không được quá 255 ký tự")
+    .trim(),
+  description: z.string()
+    .min(1, "Mô tả công việc không được để trống")
+    .trim(),
+  requirements: z.string()
+    .min(1, "Yêu cầu công việc không được để trống")
+    .trim(),
   industry_id: z.number().int().positive("ID ngành nghề không hợp lệ").optional(),
   location_id: z.number().int().positive("ID địa điểm không hợp lệ").optional(),
   employment_type: z.enum(["full_time", "part_time", "contract", "freelance", "internship"]),
@@ -38,30 +47,22 @@ export async function createJob(params: CreateJobParams): Promise<Result> {
     // 1. Validate input
     const data = createJobSchema.parse(params);
 
-    // 2. Create Supabase client and get user
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user } = authCheck;
+
+    // 3. Check company access
+    const companyCheck = await checkCompanyAccess(data.company_id);
+    if (!companyCheck.success) {
+      return { success: false, error: companyCheck.error };
+    }
+
+    // 4. Validate industry exists (if provided)
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để tạo việc làm" };
-    }
-
-    // 3. Check if company exists and user has permission
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .select("id, owner_id, name")
-      .eq("id", data.company_id)
-      .single();
-
-    if (companyError || !company) {
-      return { success: false, error: "Công ty không tồn tại" };
-    }
-
-    if (company.owner_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền tạo việc làm cho công ty này" };
-    }
-
-    // 4. Check if industry exists (if provided)
     if (data.industry_id) {
       const { data: industry, error: industryError } = await supabase
         .from("industries")
@@ -74,7 +75,7 @@ export async function createJob(params: CreateJobParams): Promise<Result> {
       }
     }
 
-    // 5. Check if location exists (if provided)
+    // 5. Validate location exists (if provided)
     if (data.location_id) {
       const { data: location, error: locationError } = await supabase
         .from("locations")
@@ -103,7 +104,6 @@ export async function createJob(params: CreateJobParams): Promise<Result> {
         salary_min: data.salary_min || null,
         salary_max: data.salary_max || null,
         is_remote: data.is_remote || false,
-
         application_deadline: data.application_deadline || null,
         status: data.status || "draft",
       })
@@ -116,7 +116,7 @@ export async function createJob(params: CreateJobParams): Promise<Result> {
       .single();
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.JOB.CREATE_FAILED };
     }
 
     return { success: true, data: job };
@@ -124,6 +124,6 @@ export async function createJob(params: CreateJobParams): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi tạo việc làm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

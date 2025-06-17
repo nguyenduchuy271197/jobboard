@@ -3,11 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { ApplicationReportParams, ApplicationReportData } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAdminOrEmployerAuth } from "@/lib/auth-utils";
 
 const schema = z.object({
   date_range: z.object({
-    start: z.string(),
-    end: z.string(),
+    start: z.string().refine(date => !isNaN(Date.parse(date)), "Ngày bắt đầu không hợp lệ"),
+    end: z.string().refine(date => !isNaN(Date.parse(date)), "Ngày kết thúc không hợp lệ"),
   }),
   status_filter: z.array(z.enum(["pending", "reviewing", "interviewing", "accepted", "rejected", "withdrawn"])).optional(),
   company_id: z.number().optional(),
@@ -29,29 +31,16 @@ export async function getApplicationReport(
     // 1. Validate input
     const validatedParams = schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check authentication and permissions (admin or employer)
+    const authCheck = await checkAdminOrEmployerAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user, profile } = authCheck;
+
+    // 3. Build base query with filters
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
-
-    // 3. Check permissions (admin or employer)
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile || !["admin", "employer"].includes(profile.role)) {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
-
-    // 4. Build base query with filters
     let baseQuery = supabase
       .from("applications")
       .select(`
@@ -105,10 +94,14 @@ export async function getApplicationReport(
 
     // For employers, only show their company's applications
     if (profile.role === "employer") {
-      const { data: userCompanies } = await supabase
+      const { data: userCompanies, error: companyError } = await supabase
         .from("companies")
         .select("id")
         .eq("owner_id", user.id);
+      
+      if (companyError) {
+        return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+      }
       
       if (userCompanies && userCompanies.length > 0) {
         const companyIds = userCompanies.map(c => c.id);
@@ -116,19 +109,19 @@ export async function getApplicationReport(
       } else {
         return { 
           success: false, 
-          error: "Không tìm thấy công ty của bạn" 
+          error: ERROR_MESSAGES.COMPANY.NOT_FOUND
         };
       }
     }
 
-    // 5. Get applications data
+    // 4. Get applications data
     const { data: applications, error: applicationsError } = await baseQuery;
 
     if (applicationsError) {
-      return { success: false, error: "Lỗi khi lấy dữ liệu đơn ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
-    // 6. Calculate summary metrics
+    // 5. Calculate summary metrics
     const totalApplications = applications?.length || 0;
     const statusCounts = applications?.reduce((acc: Record<string, number>, app) => {
       acc[app.status] = (acc[app.status] || 0) + 1;
@@ -141,14 +134,14 @@ export async function getApplicationReport(
 
     const avgResponseTime = 7; // This would need to be calculated from status history
 
-    // 7. Status breakdown
+    // 6. Status breakdown
     const statusBreakdown = Object.entries(statusCounts).map(([status, count]) => ({
       status,
       count: count as number,
       percentage: totalApplications > 0 ? Math.round(((count as number) / totalApplications) * 100) : 0,
     }));
 
-    // 8. Industry analysis
+    // 7. Industry analysis
     const industryAnalysis = applications
       ?.reduce((acc: Record<string, number>, app) => {
         const industry = (app.jobs as { industries: { name: string } }).industries.name;
@@ -164,7 +157,7 @@ export async function getApplicationReport(
       }))
       .sort((a, b) => b.applications - a.applications);
 
-    // 9. Location analysis
+    // 8. Location analysis
     const locationAnalysis = applications
       ?.reduce((acc: Record<string, number>, app) => {
         const location = (app.jobs as { locations: { name: string } }).locations.name;
@@ -180,7 +173,7 @@ export async function getApplicationReport(
       }))
       .sort((a, b) => b.applications - a.applications);
 
-    // 10. Timeline analysis - Group by day
+    // 9. Timeline analysis - Group by day
     const timelineData = applications
       ?.reduce((acc: Record<string, number>, app) => {
         const date = new Date(app.applied_at).toISOString().split('T')[0];
@@ -195,7 +188,7 @@ export async function getApplicationReport(
       }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // 11. Company performance (for admin only)
+    // 10. Company performance (for admin only)
     let companyPerformance: Array<{
       company_id: number;
       company_name: string;
@@ -233,7 +226,7 @@ export async function getApplicationReport(
         .sort((a, b) => b.total_applications - a.total_applications);
     }
 
-    // 12. Experience level trends
+    // 11. Experience level trends
     const experienceLevelStats = applications
       ?.reduce((acc: Record<string, number>, app) => {
         const level = (app.jobs as { experience_level: string }).experience_level || "unknown";
@@ -249,7 +242,7 @@ export async function getApplicationReport(
       }))
       .sort((a, b) => b.applications - a.applications);
 
-    // 13. Funnel analysis
+    // 12. Funnel analysis
     const funnelStages = [
       { stage: "Đơn ứng tuyển", count: totalApplications },
       { stage: "Đang xem xét", count: statusCounts["reviewing"] || 0 },
@@ -265,7 +258,7 @@ export async function getApplicationReport(
         : 100,
     }));
 
-    // 14. Top performing jobs
+    // 13. Top performing jobs
     const jobStats = applications
       ?.reduce((acc: Record<number, { title: string; total: number; accepted: number }>, app) => {
         const jobId = (app.jobs as { id: number; title: string }).id;
@@ -293,7 +286,7 @@ export async function getApplicationReport(
       .sort((a, b) => b.total_applications - a.total_applications)
       .slice(0, 10);
 
-    // 15. Candidate insights
+    // 14. Candidate insights
     const candidateInsights = [
       {
         metric: "Tỷ lệ phản hồi trung bình",
@@ -315,7 +308,7 @@ export async function getApplicationReport(
       },
     ];
 
-    // 16. Format response
+    // 15. Format response
     const reportData: ApplicationReportData = {
       summary: {
         total_applications: totalApplications,
@@ -344,6 +337,6 @@ export async function getApplicationReport(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi tạo báo cáo đơn ứng tuyển" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import type { DatabaseJobApplication } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const paramsSchema = z.object({
   jobId: z.number().positive(),
@@ -18,37 +20,41 @@ export async function getJobApplicationsForJob(
   error: string 
 }> {
   try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
+    // 1. Validate input
     const { jobId: validJobId } = paramsSchema.parse({ jobId });
 
-    // First, verify the user owns the job or is authorized
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user } = authCheck;
+
+    // 3. Verify user owns the job or is authorized
+    const supabase = await createClient();
     const { data: job, error: jobError } = await supabase
       .from("jobs")
       .select(`
         id,
-                    company:companies (
-              id,
-              owner_id
-            )
+        company:companies (
+          id,
+          owner_id
+        )
       `)
       .eq("id", validJobId)
       .single();
 
     if (jobError || !job) {
-      return { success: false, error: "Công việc không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.JOB.NOT_FOUND };
     }
 
     // Check if user owns the company that posted the job
     if (job.company?.owner_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền xem hồ sơ ứng tuyển của công việc này" };
+      return { success: false, error: ERROR_MESSAGES.JOB.UNAUTHORIZED_ACCESS };
     }
 
+    // 4. Fetch applications
     const { data: applications, error } = await supabase
       .from("applications")
       .select(`
@@ -72,8 +78,7 @@ export async function getJobApplicationsForJob(
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching job applications:", error);
-      return { success: false, error: "Không thể tải danh sách hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return {
@@ -81,12 +86,10 @@ export async function getJobApplicationsForJob(
       data: applications || [],
     };
   } catch (error) {
-    console.error("Error in getJobApplicationsForJob:", error);
-    
     if (error instanceof z.ZodError) {
       return { success: false, error: "ID công việc không hợp lệ" };
     }
     
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

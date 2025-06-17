@@ -3,9 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { JobSeekerProfile } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const getJobSeekerProfilesSchema = z.object({
-  search: z.string().optional(),
+  search: z.string().trim().optional(),
   preferred_location_id: z.number().int().positive().optional(),
   experience_level: z.enum(["entry_level", "mid_level", "senior_level", "executive"]).optional(),
   preferred_salary_min: z.number().min(0).optional(),
@@ -77,7 +78,7 @@ export async function getJobSeekerProfiles(params?: GetJobSeekerProfilesParams):
     const { data: profiles, error } = await query;
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return { success: true, data: profiles || [] };
@@ -85,6 +86,6 @@ export async function getJobSeekerProfiles(params?: GetJobSeekerProfilesParams):
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy danh sách hồ sơ ứng viên" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

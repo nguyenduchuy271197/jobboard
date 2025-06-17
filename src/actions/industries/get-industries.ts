@@ -3,9 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Industry } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const getIndustriesSchema = z.object({
-  search: z.string().optional(),
+  search: z.string().trim().optional(),
   is_active: z.boolean().optional(),
   limit: z.number().min(1).max(100).optional(),
   offset: z.number().min(0).optional(),
@@ -21,10 +22,8 @@ export async function getIndustries(params?: GetIndustriesParams): Promise<Resul
     // 1. Validate input
     const data = getIndustriesSchema?.parse(params) || {};
 
-    // 2. Create Supabase client
+    // 2. Build query
     const supabase = await createClient();
-
-    // 3. Build query
     let query = supabase
       .from("industries")
       .select("*")
@@ -48,11 +47,11 @@ export async function getIndustries(params?: GetIndustriesParams): Promise<Resul
       query = query.range(data.offset, data.offset + (data.limit || 50) - 1);
     }
 
-    // 4. Execute query
+    // 3. Execute query
     const { data: industries, error } = await query;
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return { success: true, data: industries || [] };
@@ -60,6 +59,6 @@ export async function getIndustries(params?: GetIndustriesParams): Promise<Resul
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy danh sách ngành nghề" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

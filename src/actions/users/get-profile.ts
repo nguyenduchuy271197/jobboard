@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { Profile } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 type Result = 
   | { success: true; data: Profile } 
@@ -9,35 +10,14 @@ type Result =
 
 export async function getUserProfile(): Promise<Result> {
   try {
-    // 1. Create Supabase client
-    const supabase = await createClient();
-
-    // 2. Get current user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { success: false, error: "Chưa đăng nhập" };
+    // 1. Check authentication and get profile
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // 3. Get user profile
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) {
-      return { success: false, error: profileError.message };
-    }
-
-    if (!profile) {
-      return { success: false, error: "Profile không tồn tại" };
-    }
-
-    return { success: true, data: profile };
+    return { success: true, data: authCheck.profile };
   } catch {
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thông tin profile" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Job } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const getJobSchema = z.object({
   id: z.number().int().positive("ID việc làm không hợp lệ"),
@@ -35,13 +36,13 @@ export async function getJobDetails(params: GetJobParams): Promise<Result> {
 
     if (error) {
       if (error.code === "PGRST116") {
-        return { success: false, error: "Việc làm không tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.JOB.NOT_FOUND };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (!job) {
-      return { success: false, error: "Việc làm không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.JOB.NOT_FOUND };
     }
 
     return { success: true, data: job };
@@ -49,6 +50,6 @@ export async function getJobDetails(params: GetJobParams): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thông tin việc làm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

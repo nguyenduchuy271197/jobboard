@@ -1,11 +1,12 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import { Company } from "@/types/custom.types";
 
 const getCompanySchema = z.object({
-  id: z.number().int().positive("ID công ty không hợp lệ"),
+  id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID),
 });
 
 type GetCompanyParams = z.infer<typeof getCompanySchema>;
@@ -35,13 +36,13 @@ export async function getCompanyDetails(params: GetCompanyParams): Promise<Resul
 
     if (error) {
       if (error.code === "PGRST116") {
-        return { success: false, error: "Công ty không tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (!company) {
-      return { success: false, error: "Công ty không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
     }
 
     return { success: true, data: company };
@@ -49,6 +50,6 @@ export async function getCompanyDetails(params: GetCompanyParams): Promise<Resul
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thông tin công ty" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import type { ExportJobsData } from "@/types/custom.types";
 
@@ -31,28 +33,16 @@ type Result = {
 
 export async function exportJobs(params: ExportJobsData): Promise<Result> {
   try {
+    // 1. Validate input
     const data = schema.parse(params);
 
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền thực hiện thao tác này" };
-    }
 
     // Build query
     let query = supabase
@@ -92,7 +82,7 @@ export async function exportJobs(params: ExportJobsData): Promise<Result> {
     const { data: jobs, error } = await query.order("created_at", { ascending: false });
 
     if (error || !jobs) {
-      return { success: false, error: "Không thể lấy dữ liệu công việc" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     // Prepare export data
@@ -154,7 +144,7 @@ export async function exportJobs(params: ExportJobsData): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 }
 

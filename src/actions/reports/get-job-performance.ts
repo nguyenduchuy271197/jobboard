@@ -3,11 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { JobPerformanceParams, JobPerformanceData } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAdminOrEmployerAuth } from "@/lib/auth-utils";
 
 const schema = z.object({
   date_range: z.object({
-    start: z.string(),
-    end: z.string(),
+    start: z.string().refine(date => !isNaN(Date.parse(date)), "Ngày bắt đầu không hợp lệ"),
+    end: z.string().refine(date => !isNaN(Date.parse(date)), "Ngày kết thúc không hợp lệ"),
   }),
   company_id: z.number().optional(),
   job_id: z.number().optional(),
@@ -28,29 +30,16 @@ export async function getJobPerformance(
     // 1. Validate input
     const validatedParams = schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check authentication and permissions (admin or employer)
+    const authCheck = await checkAdminOrEmployerAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user, profile } = authCheck;
+
+    // 3. Build base query with filters
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
-
-    // 3. Check permissions (admin or employer)
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile || !["admin", "employer"].includes(profile.role)) {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
-
-    // 4. Build base query with filters
     let baseQuery = supabase
       .from("jobs")
       .select(`
@@ -101,10 +90,14 @@ export async function getJobPerformance(
 
     // For employers, only show their company's jobs
     if (profile.role === "employer") {
-      const { data: userCompanies } = await supabase
+      const { data: userCompanies, error: companyError } = await supabase
         .from("companies")
         .select("id")
         .eq("owner_id", user.id);
+      
+      if (companyError) {
+        return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+      }
       
       if (userCompanies && userCompanies.length > 0) {
         const companyIds = userCompanies.map(c => c.id);
@@ -112,19 +105,19 @@ export async function getJobPerformance(
       } else {
         return { 
           success: false, 
-          error: "Không tìm thấy công ty của bạn" 
+          error: ERROR_MESSAGES.COMPANY.NOT_FOUND
         };
       }
     }
 
-    // 5. Get jobs data
+    // 4. Get jobs data
     const { data: jobs, error: jobsError } = await baseQuery;
 
     if (jobsError) {
-      return { success: false, error: "Lỗi khi lấy dữ liệu công việc" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
-    // 6. Calculate overview metrics
+    // 5. Calculate overview metrics
     const totalJobs = jobs?.length || 0;
     const activeJobs = jobs?.filter(job => job.status === "published").length || 0;
     const totalViews = jobs?.reduce((sum, job) => sum + (job.views_count || 0), 0) || 0;
@@ -134,7 +127,7 @@ export async function getJobPerformance(
     const avgApplicationsPerJob = totalJobs > 0 ? Math.round(totalApplications / totalJobs) : 0;
     const avgConversionRate = totalViews > 0 ? Math.round((totalApplications / totalViews) * 100) : 0;
 
-    // 7. Calculate performance metrics per job
+    // 6. Calculate performance metrics per job
     const now = new Date();
     const jobPerformanceMetrics = jobs?.map(job => {
       const applications = (job.applications as Array<{ applied_at: string; status: string }>) || [];
@@ -183,7 +176,7 @@ export async function getJobPerformance(
       };
     }) || [];
 
-    // 8. Industry performance analysis
+    // 7. Industry performance analysis
     const industryStats = jobs?.reduce((acc: Record<string, {
       jobs: number;
       views: number;
@@ -217,7 +210,7 @@ export async function getJobPerformance(
       }))
       .sort((a, b) => b.total_applications - a.total_applications);
 
-    // 9. Location performance analysis
+    // 8. Location performance analysis
     const locationStats = jobs?.reduce((acc: Record<string, {
       jobs: number;
       views: number;
@@ -251,7 +244,7 @@ export async function getJobPerformance(
       }))
       .sort((a, b) => b.total_applications - a.total_applications);
 
-    // 10. Trending skills analysis
+    // 9. Trending skills analysis
     const allSkills = jobs?.flatMap(job => job.skills_required || []) || [];
     const skillsFrequency = allSkills.reduce((acc: Record<string, number>, skill) => {
       const skillLower = skill.toLowerCase();
@@ -269,7 +262,7 @@ export async function getJobPerformance(
         avg_salary: 15000000 + Math.floor(Math.random() * 20000000), // Mock salary data
       }));
 
-    // 11. Salary analysis by experience level
+    // 10. Salary analysis by experience level
     const salaryAnalysis = jobs
       ?.filter(job => job.salary_min && job.salary_max)
       .reduce((acc: Record<string, { salaries: number[]; count: number }>, job) => {
@@ -300,7 +293,7 @@ export async function getJobPerformance(
       }))
       .sort((a, b) => b.avg_salary - a.avg_salary);
 
-    // 12. Job lifecycle analysis
+    // 11. Job lifecycle analysis
     const jobLifecycle = jobs
       ?.filter(job => job.published_at)
       .map(job => {
@@ -322,12 +315,12 @@ export async function getJobPerformance(
       })
       .sort((a, b) => b.applications_received - a.applications_received) || [];
 
-    // 13. Top and bottom performing jobs
+    // 12. Top and bottom performing jobs
     const sortedJobs = [...jobPerformanceMetrics].sort((a, b) => b.quality_score - a.quality_score);
     const topPerformingJobs = sortedJobs.slice(0, 10);
     const bottomPerformingJobs = sortedJobs.slice(-5).reverse();
 
-    // 14. Format response
+    // 13. Format response
     const performanceData: JobPerformanceData = {
       overview: {
         total_jobs: totalJobs,
@@ -357,6 +350,6 @@ export async function getJobPerformance(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi tạo báo cáo hiệu suất công việc" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

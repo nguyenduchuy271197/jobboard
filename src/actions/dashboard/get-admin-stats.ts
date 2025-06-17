@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { AdminDashboardStats } from "@/types/custom.types";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const schema = z.object({
   date_range: z.object({
@@ -22,36 +24,22 @@ export async function getAdminStats(
     // 1. Validate input
     schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
 
-    // 3. Check admin role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || profile?.role !== "admin") {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
-
-    // 4. Date ranges for calculations
+    // 3. Date ranges for calculations
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const thisWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-    // 5. Get overview statistics
+    // 4. Get overview statistics
     const [
       totalUsersResult,
       totalJobsResult,
@@ -68,7 +56,7 @@ export async function getAdminStats(
       supabase.from("jobs").select("id", { count: "exact" }).eq("status", "pending_approval"),
     ]);
 
-    // 6. Get user management data
+    // 5. Get user management data
     const [
       newUsersToday,
       newUsersThisWeek,
@@ -120,7 +108,7 @@ export async function getAdminStats(
         })),
     ]);
 
-    // 7. Get analytics data - Popular Industries
+    // 6. Get analytics data - Popular Industries
     const [
       popularIndustriesResult,
       topCompaniesResult,
@@ -204,7 +192,7 @@ export async function getAdminStats(
         })),
     ]);
 
-    // 8. Calculate success metrics
+    // 7. Calculate success metrics
     const [
       totalPublishedJobs,
       totalApplications,
@@ -248,7 +236,7 @@ export async function getAdminStats(
         return acc;
       }, 0) || 0;
 
-    // 9. Get trend data - Daily signups for last 30 days
+    // 8. Get trend data - Daily signups for last 30 days
     const last30Days = Array.from({ length: 30 }, (_, i) => {
       const date = new Date(now);
       date.setDate(date.getDate() - (29 - i));
@@ -272,7 +260,7 @@ export async function getAdminStats(
       })
     );
 
-    // 10. Get job posting trends for last 30 days
+    // 9. Get job posting trends for last 30 days
     const jobPostingTrends = await Promise.all(
       last30Days.map(async (date) => {
         const nextDate = new Date(date);
@@ -290,7 +278,7 @@ export async function getAdminStats(
       })
     );
 
-    // 11. Get application trends for last 30 days
+    // 10. Get application trends for last 30 days
     const applicationTrends = await Promise.all(
       last30Days.map(async (date) => {
         const nextDate = new Date(date);
@@ -308,7 +296,7 @@ export async function getAdminStats(
       })
     );
 
-    // 12. Calculate growth rate
+    // 11. Calculate growth rate
     const lastMonthUsers = await supabase
       .from("profiles")
       .select("id", { count: "exact" })
@@ -321,7 +309,7 @@ export async function getAdminStats(
       ? Math.round(((currentMonthUsers - previousMonthUsers) / previousMonthUsers) * 100)
       : 0;
 
-    // 13. Calculate user role percentages
+    // 12. Calculate user role percentages
     const totalUsers = totalUsersResult.count || 0;
     const formattedUsersByRole = (usersByRole.data || []).map((roleData: { role: string; count: number }) => ({
       role: roleData.role,
@@ -329,7 +317,7 @@ export async function getAdminStats(
       percentage: totalUsers > 0 ? Math.round((roleData.count / totalUsers) * 100) : 0,
     }));
 
-    // 14. Get recent system activities for alerts
+    // 13. Get recent system activities for alerts
     const recentJobs = await supabase
       .from("jobs")
       .select("created_at")
@@ -337,7 +325,6 @@ export async function getAdminStats(
       .limit(1);
 
     // Check for recent applications for alerts
-
     const systemAlerts = [
       {
         type: "info",
@@ -371,7 +358,7 @@ export async function getAdminStats(
       },
     ];
 
-    // 15. Format response
+    // 14. Format response
     const adminStats: AdminDashboardStats = {
       overview: {
         total_users: totalUsers,
@@ -448,9 +435,10 @@ export async function getAdminStats(
       data: adminStats,
     };
   } catch (error) {
+    console.error("Admin stats error:", error);
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      return { success: false, error: ERROR_MESSAGES.VALIDATION.INVALID_FORMAT };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thống kê quản trị" };
+    return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
   }
 } 

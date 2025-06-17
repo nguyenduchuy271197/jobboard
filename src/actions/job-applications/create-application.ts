@@ -3,10 +3,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import type { CreateJobApplicationData, DatabaseJobApplication } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const createApplicationSchema = z.object({
   job_id: z.number().positive(),
-  cover_letter: z.string().min(1).max(2000).optional(),
+  cover_letter: z.string().min(1).max(2000).trim().optional(),
 }).strict();
 
 export async function createApplication(
@@ -19,16 +21,19 @@ export async function createApplication(
   error: string 
 }> {
   try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
+    // 1. Validate input
     const validatedData = createApplicationSchema.parse(data);
 
-    // Check if user has a job seeker profile
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user } = authCheck;
+
+    // 3. Check if user has a job seeker profile
+    const supabase = await createClient();
     const { data: profile, error: profileError } = await supabase
       .from("job_seeker_profiles")
       .select("user_id")
@@ -39,7 +44,7 @@ export async function createApplication(
       return { success: false, error: "Bạn cần tạo hồ sơ ứng viên trước khi ứng tuyển" };
     }
 
-    // Check if job exists and is active
+    // 4. Check if job exists and is active
     const { data: job, error: jobError } = await supabase
       .from("jobs")
       .select("id, title, status, company_id")
@@ -47,14 +52,14 @@ export async function createApplication(
       .single();
 
     if (jobError || !job) {
-      return { success: false, error: "Công việc không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.JOB.NOT_FOUND };
     }
 
     if (job.status !== "published") {
-      return { success: false, error: "Công việc này hiện không còn nhận hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.JOB.APPLICATION_CLOSED };
     }
 
-    // Check if user has already applied to this job
+    // 5. Check if user has already applied to this job
     const { data: existingApplication, error: existingError } = await supabase
       .from("applications")
       .select("id")
@@ -63,16 +68,15 @@ export async function createApplication(
       .single();
 
     if (existingApplication) {
-      return { success: false, error: "Bạn đã ứng tuyển vị trí này rồi" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.ALREADY_EXISTS };
     }
 
     // Ignore not found error for existing application check
     if (existingError && existingError.code !== "PGRST116") {
-      console.error("Error checking existing application:", existingError);
-      return { success: false, error: "Có lỗi khi kiểm tra hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
-    // Create the application
+    // 6. Create the application
     const { data: application, error: createError } = await supabase
       .from("applications")
       .insert({
@@ -102,12 +106,11 @@ export async function createApplication(
       .single();
 
     if (createError) {
-      console.error("Error creating job application:", createError);
-      return { success: false, error: "Không thể tạo hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.CREATE_FAILED };
     }
 
     if (!application) {
-      return { success: false, error: "Không thể tạo hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.CREATE_FAILED };
     }
 
     return {
@@ -115,8 +118,6 @@ export async function createApplication(
       data: application,
     };
   } catch (error) {
-    console.error("Error in createApplication:", error);
-    
     if (error instanceof z.ZodError) {
       const firstError = error.errors[0];
       return { 
@@ -125,6 +126,6 @@ export async function createApplication(
       };
     }
     
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

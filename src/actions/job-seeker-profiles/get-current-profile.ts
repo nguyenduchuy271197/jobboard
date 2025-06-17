@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { JobSeekerProfile } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 type Result = 
   | { success: true; data: JobSeekerProfile } 
@@ -9,15 +11,16 @@ type Result =
 
 export async function getCurrentJobSeekerProfile(): Promise<Result> {
   try {
-    // 1. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để xem hồ sơ" };
+    // 1. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
+    const { user } = authCheck;
+
     // 2. Execute query with relations
+    const supabase = await createClient();
     const { data: profile, error } = await supabase
       .from("job_seeker_profiles")
       .select(`
@@ -33,7 +36,7 @@ export async function getCurrentJobSeekerProfile(): Promise<Result> {
       if (error.code === "PGRST116") {
         return { success: false, error: "Bạn chưa tạo hồ sơ ứng viên" };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (!profile) {
@@ -42,6 +45,6 @@ export async function getCurrentJobSeekerProfile(): Promise<Result> {
 
     return { success: true, data: profile };
   } catch {
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thông tin hồ sơ của bạn" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

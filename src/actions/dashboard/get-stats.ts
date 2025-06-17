@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { GeneralDashboardStats, ApplicationStatus } from "@/types/custom.types";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const schema = z.object({
   date_range: z.object({
@@ -22,53 +24,33 @@ export async function getStats(
     // 1. Validate input
     schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
 
-    // 3. Get user profile to determine role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return { success: false, error: "Không tìm thấy hồ sơ người dùng" };
-    }
-
-    // 4. Date ranges for calculations
+    // 3. Date ranges for calculations
     const now = new Date();
-    // const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Not used yet
-    const thisWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-    // 5. Get overview statistics
+    // 4. Get overview statistics
     const [
-      , // totalUsersResult - not used in current response format
       totalJobsResult,
       totalCompaniesResult,
       totalApplicationsResult,
       activeJobsResult,
-      , // recentJobsResult - not used in current response format
     ] = await Promise.all([
-      supabase.from("profiles").select("id", { count: "exact" }),
       supabase.from("jobs").select("id", { count: "exact" }),
       supabase.from("companies").select("id", { count: "exact" }),
       supabase.from("applications").select("id", { count: "exact" }),
       supabase.from("jobs").select("id", { count: "exact" }).eq("status", "published"),
-      supabase.from("jobs").select("id", { count: "exact" }).gte("created_at", thisWeek.toISOString()),
     ]);
 
-    // 6. Get growth metrics
+    // 5. Get growth metrics
     const [
       newUsersThisMonth,
       newJobsThisMonth,
@@ -106,7 +88,7 @@ export async function getStats(
         .lt("applied_at", currentMonth.toISOString()),
     ]);
 
-    // 7. Calculate growth rates
+    // 6. Calculate growth rates
     const userGrowthRate = (lastMonthUsers.count || 0) > 0
       ? Math.round((((newUsersThisMonth.count || 0) - (lastMonthUsers.count || 0)) / (lastMonthUsers.count || 0)) * 100)
       : (newUsersThisMonth.count || 0) > 0 ? 100 : 0;
@@ -119,8 +101,8 @@ export async function getStats(
       ? Math.round((((newApplicationsThisMonth.count || 0) - (lastMonthApplications.count || 0)) / (lastMonthApplications.count || 0)) * 100)
       : (newApplicationsThisMonth.count || 0) > 0 ? 100 : 0;
 
-    // 8. Get recent activity
-    const [recentApplications, recentJobs, ] = await Promise.all([
+    // 7. Get recent activity
+    const [recentApplications, recentJobs] = await Promise.all([
       supabase
         .from("applications")
         .select(`
@@ -144,65 +126,13 @@ export async function getStats(
         `)
         .order("created_at", { ascending: false })
         .limit(10),
-      supabase
-        .from("companies")
-        .select(`
-          id,
-          name,
-          logo_url,
-          jobs!inner(id)
-        `)
-        .eq("is_verified", true)
-        .eq("jobs.status", "published")
-        .then(result => ({
-          data: result.data
-            ?.reduce((acc: Array<{ company_id: number; company_name: string; logo_url?: string; job_count: number }>, company) => {
-              const existing = acc.find(item => item.company_id === company.id);
-              if (existing) {
-                existing.job_count++;
-              } else {
-                acc.push({
-                  company_id: company.id,
-                  company_name: company.name,
-                  logo_url: company.logo_url || undefined,
-                  job_count: 1
-                });
-              }
-              return acc;
-            }, [])
-            ?.sort((a, b) => b.job_count - a.job_count)
-            ?.slice(0, 5) || [],
-          error: result.error
-        })),
     ]);
 
-    // 9. Get performance indicators
+    // 8. Get performance indicators
     const [
-      , // applicationSuccessRate - not used in current response format
-      , // avgJobViews - not used in current response format
       activeJobSeekers,
       pendingApplications,
     ] = await Promise.all([
-      supabase
-        .from("applications")
-        .select("status")
-        .then(result => {
-          const applications = result.data || [];
-          const total = applications.length;
-          const successful = applications.filter(app => 
-            app.status === "accepted" || app.status === "interviewing"
-          ).length;
-          return { rate: total > 0 ? Math.round((successful / total) * 100) : 0 };
-        }),
-      supabase
-        .from("jobs")
-        .select("views_count")
-        .eq("status", "published")
-        .then(result => ({
-          avg: result.data?.length 
-            ? Math.round(result.data.reduce((sum, job) => sum + (job.views_count || 0), 0) / result.data.length)
-            : 0
-        })),
       supabase
         .from("job_seeker_profiles")
         .select("user_id", { count: "exact" })
@@ -213,7 +143,7 @@ export async function getStats(
         .eq("status", "pending"),
     ]);
 
-    // 10. Get trending data - Popular industries
+    // 9. Get trending data - Popular industries
     const { data: popularIndustries } = await supabase
       .from("jobs")
       .select(`
@@ -239,7 +169,7 @@ export async function getStats(
         error: result.error
       }));
 
-    // 11. Get activity timeline for last 7 days
+    // 10. Get activity timeline for last 7 days
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date(now);
       date.setDate(date.getDate() - (6 - i));
@@ -278,7 +208,7 @@ export async function getStats(
       })
     );
 
-    // 12. Format recent activities
+    // 11. Format recent activities
     const formattedRecentApplications = recentApplications.data?.map(app => ({
       id: app.id,
       type: "application" as const,
@@ -300,12 +230,7 @@ export async function getStats(
       status: job.status,
     })) || [];
 
-    // Mix recent activities and sort by timestamp - not used in current response format
-    // const recentActivity = [...formattedRecentApplications, ...formattedRecentJobs]
-    //   .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    //   .slice(0, 10);
-
-    // 13. Format response
+    // 12. Format response
     const generalStats: GeneralDashboardStats = {
       overview: {
         total_jobs: totalJobsResult.count || 0,
@@ -364,9 +289,10 @@ export async function getStats(
       data: generalStats,
     };
   } catch (error) {
+    console.error("General stats error:", error);
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      return { success: false, error: ERROR_MESSAGES.VALIDATION.INVALID_FORMAT };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thống kê tổng quan" };
+    return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
   }
 } 

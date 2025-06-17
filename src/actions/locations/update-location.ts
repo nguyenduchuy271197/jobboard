@@ -3,12 +3,22 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Location, LocationUpdateDto } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAdminAuth } from "@/lib/auth-utils";
 
 const updateLocationSchema = z.object({
   id: z.number().int().positive("ID địa điểm không hợp lệ"),
-  name: z.string().min(1, "Tên địa điểm là bắt buộc").max(255, "Tên địa điểm không được quá 255 ký tự").optional(),
-  slug: z.string().min(1, "Slug là bắt buộc").max(255, "Slug không được quá 255 ký tự")
-    .regex(/^[a-z0-9-]+$/, "Slug chỉ được chứa chữ thường, số và dấu gạch ngang").optional(),
+  name: z.string()
+    .min(1, "Tên địa điểm là bắt buộc")
+    .max(255, "Tên địa điểm không được quá 255 ký tự")
+    .trim()
+    .optional(),
+  slug: z.string()
+    .min(1, "Slug là bắt buộc")
+    .max(255, "Slug không được quá 255 ký tự")
+    .regex(/^[a-z0-9-]+$/, "Slug chỉ được chứa chữ thường, số và dấu gạch ngang")
+    .trim()
+    .optional(),
 });
 
 type UpdateLocationParams = z.infer<typeof updateLocationSchema>;
@@ -21,32 +31,14 @@ export async function updateLocation(params: UpdateLocationParams): Promise<Resu
     // 1. Validate input
     const data = updateLocationSchema.parse(params);
 
-    // 2. Create Supabase client and check auth
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    // 3. Check if location exists
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
-
-    // 3. Check if current user is admin
-    const { data: currentUserProfile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) {
-      return { success: false, error: profileError.message };
-    }
-
-    if (currentUserProfile?.role !== "admin") {
-      return { success: false, error: "Chỉ admin mới có thể cập nhật địa điểm" };
-    }
-
-    // 4. Check if location exists
     const { data: existingLocation, error: existsError } = await supabase
       .from("locations")
       .select("*")
@@ -61,7 +53,7 @@ export async function updateLocation(params: UpdateLocationParams): Promise<Resu
       return { success: false, error: "Địa điểm không tồn tại" };
     }
 
-    // 5. Check if new name or slug conflicts with other locations
+    // 4. Check if new name or slug conflicts with other locations
     if (data.name || data.slug) {
       const conditions = [];
       if (data.name && data.name !== existingLocation.name) {
@@ -80,7 +72,7 @@ export async function updateLocation(params: UpdateLocationParams): Promise<Resu
           .single();
 
         if (checkError && checkError.code !== "PGRST116") {
-          return { success: false, error: checkError.message };
+          return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
         }
 
         if (conflictLocation) {
@@ -89,7 +81,7 @@ export async function updateLocation(params: UpdateLocationParams): Promise<Resu
       }
     }
 
-    // 6. Update location
+    // 5. Update location
     const updateData: LocationUpdateDto = {
       ...(data.name && { name: data.name }),
       ...(data.slug && { slug: data.slug }),
@@ -104,7 +96,7 @@ export async function updateLocation(params: UpdateLocationParams): Promise<Resu
       .single();
 
     if (updateError) {
-      return { success: false, error: updateError.message };
+      return { success: false, error: "Không thể cập nhật địa điểm" };
     }
 
     if (!updatedLocation) {
@@ -116,6 +108,6 @@ export async function updateLocation(params: UpdateLocationParams): Promise<Resu
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi cập nhật địa điểm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

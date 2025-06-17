@@ -1,10 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { checkAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const schema = z.object({
-  query: z.string().min(1, "Từ khóa tìm kiếm không được để trống"),
+  query: z.string().trim().min(1, "Từ khóa tìm kiếm không được để trống"),
   limit: z.number().min(1).max(20).optional().default(10),
   type: z.enum(["all", "jobs", "companies", "skills", "locations", "industries"]).optional().default("all"),
 });
@@ -35,23 +37,20 @@ type Result =
 
 export async function getSearchSuggestions(params: SearchSuggestionsParams): Promise<Result> {
   try {
+    // Step 1: Validate input
     const data = schema.parse(params);
-    const supabase = await createClient();
 
-    // Kiểm tra authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để lấy gợi ý" };
+    // Step 2: Check authentication
+    const authCheck = await checkAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
+    const supabase = await createClient();
     const searchQuery = `%${data.query}%`;
     const suggestions: SearchSuggestion[] = [];
 
-    // Gợi ý từ job titles
+    // Step 3: Get job suggestions
     if (data.type === "all" || data.type === "jobs") {
       const { data: jobSuggestions, error: jobsError } = await supabase
         .from("jobs")
@@ -78,7 +77,7 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
       }
     }
 
-    // Gợi ý từ company names
+    // Step 4: Get company suggestions
     if (data.type === "all" || data.type === "companies") {
       const { data: companySuggestions, error: companiesError } = await supabase
         .from("companies")
@@ -105,7 +104,7 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
       }
     }
 
-    // Gợi ý từ locations
+    // Step 5: Get location suggestions
     if (data.type === "all" || data.type === "locations") {
       const { data: locationSuggestions, error: locationsError } = await supabase
         .from("locations")
@@ -114,7 +113,7 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
         .limit(Math.floor(data.limit / (data.type === "all" ? 5 : 1)));
 
       if (!locationsError && locationSuggestions) {
-        // Đếm số lượng jobs tại mỗi location
+        // Count jobs for each location
         for (const location of locationSuggestions) {
           const { count } = await supabase
             .from("jobs")
@@ -134,7 +133,7 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
       }
     }
 
-    // Gợi ý từ industries
+    // Step 6: Get industry suggestions
     if (data.type === "all" || data.type === "industries") {
       const { data: industrySuggestions, error: industriesError } = await supabase
         .from("industries")
@@ -144,7 +143,7 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
         .limit(Math.floor(data.limit / (data.type === "all" ? 5 : 1)));
 
       if (!industriesError && industrySuggestions) {
-        // Đếm số lượng jobs trong mỗi industry
+        // Count jobs for each industry
         for (const industry of industrySuggestions) {
           const { count } = await supabase
             .from("jobs")
@@ -164,7 +163,7 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
       }
     }
 
-    // Gợi ý từ skills (từ job requirements và skills_required)
+    // Step 7: Get skill suggestions
     if (data.type === "all" || data.type === "skills") {
       const { data: skillJobs, error: skillsError } = await supabase
         .from("jobs")
@@ -196,7 +195,7 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
       }
     }
 
-    // Sắp xếp suggestions theo độ relevance (exact matches first)
+    // Step 8: Sort suggestions by relevance
     const sortedSuggestions = suggestions
       .sort((a, b) => {
         const aExact = a.text.toLowerCase() === data.query.toLowerCase();
@@ -224,6 +223,6 @@ export async function getSearchSuggestions(params: SearchSuggestionsParams): Pro
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống khi lấy gợi ý" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

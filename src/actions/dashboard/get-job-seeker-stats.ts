@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { JobSeekerDashboardStats } from "@/types/custom.types";
+import { checkAuthWithRole } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const schema = z.object({
   date_range: z.object({
@@ -22,29 +24,16 @@ export async function getJobSeekerStats(
     // 1. Validate input
     schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check job seeker authentication
+    const authCheck = await checkAuthWithRole("job_seeker");
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user, profile } = authCheck;
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
 
-    // 3. Check job seeker role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role, full_name, avatar_url")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || profile?.role !== "job_seeker") {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
-
-    // 4. Get job seeker profile
+    // 3. Get job seeker profile
     const { data: jobSeekerProfile } = await supabase
       .from("job_seeker_profiles")
       .select(`
@@ -62,15 +51,11 @@ export async function getJobSeekerStats(
       .eq("user_id", user.id)
       .single();
 
-    // 5. Date ranges for calculations
+    // 4. Date ranges for calculations
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const thisWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    // Last month - not used in current response format
-    // const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-    // 6. Calculate profile completion
+    // 5. Calculate profile completion
     const profileFields = [
       profile?.full_name,
       profile?.avatar_url,
@@ -84,14 +69,11 @@ export async function getJobSeekerStats(
     const completedFields = profileFields.filter(field => field);
     const profileCompletion = Math.round((completedFields.length / profileFields.length) * 100);
 
-    // 7. Get application statistics
+    // 6. Get application statistics
     const [
       totalApplicationsResult,
-      , // applicationsToday - not used yet
-      , // applicationsThisWeek - not used yet
       applicationsThisMonth,
       pendingApplications,
-      , // reviewingApplications - not used yet
       interviewingApplications,
       acceptedApplications,
       rejectedApplications,
@@ -104,27 +86,12 @@ export async function getJobSeekerStats(
         .from("applications")
         .select("id", { count: "exact" })
         .eq("applicant_id", user.id)
-        .gte("applied_at", today.toISOString()),
-      supabase
-        .from("applications")
-        .select("id", { count: "exact" })
-        .eq("applicant_id", user.id)
-        .gte("applied_at", thisWeek.toISOString()),
-      supabase
-        .from("applications")
-        .select("id", { count: "exact" })
-        .eq("applicant_id", user.id)
         .gte("applied_at", currentMonth.toISOString()),
       supabase
         .from("applications")
         .select("id", { count: "exact" })
         .eq("applicant_id", user.id)
         .eq("status", "pending"),
-      supabase
-        .from("applications")
-        .select("id", { count: "exact" })
-        .eq("applicant_id", user.id)
-        .eq("status", "reviewing"),
       supabase
         .from("applications")
         .select("id", { count: "exact" })
@@ -142,7 +109,7 @@ export async function getJobSeekerStats(
         .eq("status", "rejected"),
     ]);
 
-    // 8. Get job matching data
+    // 7. Get job matching data
     const userSkills = jobSeekerProfile?.skills || [];
     const userLocation = jobSeekerProfile?.preferred_location_id;
     const userExperience = jobSeekerProfile?.experience_level;
@@ -215,7 +182,7 @@ export async function getJobSeekerStats(
     ?.sort((a, b) => b.match_percentage - a.match_percentage)
     ?.slice(0, 10) || [];
 
-    // 9. Get activity metrics - applications timeline for last 30 days
+    // 8. Get activity metrics - applications timeline for last 30 days
     const last30Days = Array.from({ length: 30 }, (_, i) => {
       const date = new Date(now);
       date.setDate(date.getDate() - (29 - i));
@@ -240,7 +207,7 @@ export async function getJobSeekerStats(
       })
     );
 
-    // 10. Get recent applications with job details
+    // 9. Get recent applications with job details
     const { data: recentApplications } = await supabase
       .from("applications")
       .select(`
@@ -262,68 +229,15 @@ export async function getJobSeekerStats(
       status: app.status,
     })) || [];
 
-    // 11. Get skills analysis from user's applications - not used in current response format
-    // const { data: appliedJobs } = await supabase
-    //   .from("applications")
-    //   .select(`
-    //     jobs!inner(skills_required, industries!inner(name))
-    //   `)
-    //   .eq("applicant_id", user.id);
-
-    // Applied skills analysis - not used in current response format
-    // const appliedSkills = appliedJobs
-    //   ?.flatMap(app => (app.jobs as { skills_required: string[] }).skills_required || [])
-    //   .reduce((acc: Record<string, number>, skill) => {
-    //     const skillLower = skill.toLowerCase();
-    //     acc[skillLower] = (acc[skillLower] || 0) + 1;
-    //     return acc;
-    //   }, {}) || {};
-
-    // Skills analysis - not used in current response format
-    // const skillsAnalysis = Object.entries(appliedSkills)
-    //   .sort(([,a], [,b]) => b - a)
-    //   .slice(0, 10)
-    //   .map(([skill, count]) => ({
-    //     skill: skill.charAt(0).toUpperCase() + skill.slice(1),
-    //     frequency: count as number,
-    //     is_in_profile: userSkills.some(userSkill => 
-    //       userSkill.toLowerCase().includes(skill) || skill.includes(userSkill.toLowerCase())
-    //     ),
-    //   }));
-
-    // 12. Calculate success metrics
+    // 10. Calculate success metrics
     const totalApps = totalApplicationsResult.count || 0;
-    // Response rate - not used in current response format
-    // const responseRate = totalApps > 0 
-    //   ? Math.round(((totalApps - (pendingApplications.count || 0)) / totalApps) * 100)
-    //   : 0;
-    
-    // Interview rate - not used in current response format
-    // const interviewRate = totalApps > 0
-    //   ? Math.round(((interviewingApplications.count || 0) / totalApps) * 100)
-    //   : 0;
-
     const successRate = totalApps > 0
       ? Math.round(((acceptedApplications.count || 0) / totalApps) * 100)
       : 0;
 
-    // 13. Calculate growth metrics - not used in current response format
-    // const lastMonthApplications = await supabase
-    //   .from("applications")
-    //   .select("id", { count: "exact" })
-    //   .eq("applicant_id", user.id)
-    //   .gte("applied_at", lastMonth.toISOString())
-    //   .lt("applied_at", currentMonth.toISOString());
-
     const currentMonthApps = applicationsThisMonth.count || 0;
-    // Previous month apps - not used in current response format
-    // const previousMonthApps = lastMonthApplications.count || 0;
-    // Growth rate - not used in current response format
-    // const growthRate = previousMonthApps > 0 
-    //   ? Math.round(((currentMonthApps - previousMonthApps) / previousMonthApps) * 100)
-    //   : currentMonthApps > 0 ? 100 : 0;
 
-    // 14. Format response
+    // 11. Format response
     const jobSeekerStats: JobSeekerDashboardStats = {
       profile: {
         is_complete: profileCompletion >= 100,
@@ -393,9 +307,10 @@ export async function getJobSeekerStats(
       data: jobSeekerStats,
     };
   } catch (error) {
+    console.error("Job seeker stats error:", error);
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
+      return { success: false, error: ERROR_MESSAGES.VALIDATION.INVALID_FORMAT };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thống kê ứng viên" };
+    return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
   }
 } 

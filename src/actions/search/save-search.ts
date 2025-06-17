@@ -2,44 +2,29 @@
 
 // import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { checkAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
-// const schema = z.object({
-//   name: z.string().min(1, "Tên tìm kiếm không được để trống").max(100, "Tên tìm kiếm không được vượt quá 100 ký tự"),
-//   search_params: z.object({
-//     query: z.string().optional(),
-//     industry_id: z.number().optional(),
-//     location_id: z.number().optional(),
-//     company_id: z.number().optional(),
-//     employment_type: z.enum(["full_time", "part_time", "contract", "internship", "freelance"]).optional(),
-//     experience_level: z.enum(["entry_level", "mid_level", "senior_level", "executive"]).optional(),
-//     salary_min: z.number().min(0).optional(),
-//     salary_max: z.number().min(0).optional(),
-//     is_remote: z.boolean().optional(),
-//     is_featured: z.boolean().optional(),
-//     skills: z.array(z.string()).optional(),
-//     posted_within_days: z.number().min(1).max(365).optional(),
-//   }),
-//   notification_enabled: z.boolean().optional().default(false),
-// });
+const schema = z.object({
+  name: z.string().trim().min(1, "Tên tìm kiếm không được để trống").max(100, "Tên tìm kiếm không được vượt quá 100 ký tự"),
+  search_params: z.object({
+    query: z.string().trim().optional(),
+    industry_id: z.number().positive().optional(),
+    location_id: z.number().positive().optional(),
+    company_id: z.number().positive().optional(),
+    employment_type: z.enum(["full_time", "part_time", "contract", "internship", "freelance"]).optional(),
+    experience_level: z.enum(["entry_level", "mid_level", "senior_level", "executive"]).optional(),
+    salary_min: z.number().min(0).optional(),
+    salary_max: z.number().min(0).optional(),
+    is_remote: z.boolean().optional(),
+    is_featured: z.boolean().optional(),
+    skills: z.array(z.string().trim()).optional(),
+    posted_within_days: z.number().min(1).max(365).optional(),
+  }),
+  notification_enabled: z.boolean().optional().default(false),
+});
 
-export type SaveSearchParams = {
-  name: string;
-  search_params: {
-    query?: string;
-    industry_id?: number;
-    location_id?: number;
-    company_id?: number;
-    employment_type?: "full_time" | "part_time" | "contract" | "internship" | "freelance";
-    experience_level?: "entry_level" | "mid_level" | "senior_level" | "executive";
-    salary_min?: number;
-    salary_max?: number;
-    is_remote?: boolean;
-    is_featured?: boolean;
-    skills?: string[];
-    posted_within_days?: number;
-  };
-  notification_enabled?: boolean;
-};
+export type SaveSearchParams = z.infer<typeof schema>;
 
 export type SavedSearch = {
   id: number;
@@ -57,9 +42,44 @@ type Result =
   | { success: true; data: SavedSearch }
   | { success: false; error: string };
 
-export async function saveSearch(/* _params: SaveSearchParams */): Promise<Result> {
+export async function saveSearch(params: SaveSearchParams): Promise<Result> {
   try {
-    // TODO: Implement saved searches table in database schema
+    // Step 1: Validate input
+    schema.parse(params);
+
+    // Step 2: Check authentication
+    const authCheck = await checkAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    // Step 3: TODO - Implement saved searches table in database schema
+    // When implementing, uncomment and modify the following:
+    
+    // const supabase = await createClient();
+    
+    // const { data: savedSearch, error } = await supabase
+    //   .from("saved_searches")
+    //   .insert({
+    //     user_id: authCheck.user.id,
+    //     name: data.name,
+    //     search_params: data.search_params,
+    //     notification_enabled: data.notification_enabled,
+    //     created_at: new Date().toISOString(),
+    //     updated_at: new Date().toISOString(),
+    //   })
+    //   .select()
+    //   .single();
+    
+    // if (error) {
+    //   if (error.code === "23505") { // Unique constraint violation
+    //     return { success: false, error: "Tên tìm kiếm đã tồn tại" };
+    //   }
+    //   return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
+    // }
+    
+    // return { success: true, data: savedSearch };
+
     // For now, return feature not available error
     return { 
       success: false, 
@@ -69,6 +89,6 @@ export async function saveSearch(/* _params: SaveSearchParams */): Promise<Resul
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống khi lưu tìm kiếm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -1,12 +1,14 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAuthWithProfile, checkCompanyAccess } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import { Company } from "@/types/custom.types";
 
 const uploadLogoSchema = z.object({
-  company_id: z.number().int().positive("ID công ty không hợp lệ"),
-  logo: z.instanceof(FormData, { message: "Logo file là bắt buộc" }),
+  company_id: z.number().int().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID),
+  logo: z.instanceof(FormData, { message: ERROR_MESSAGES.FILE.NOT_FOUND }),
 });
 
 type UploadLogoParams = z.infer<typeof uploadLogoSchema>;
@@ -19,48 +21,46 @@ export async function uploadCompanyLogo(params: UploadLogoParams): Promise<Resul
     // 1. Validate input
     const data = uploadLogoSchema.parse(params);
 
-    // 2. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để upload logo" };
+    // 2. Check authentication and company access
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // 3. Check if company exists and user has permission
+    const accessCheck = await checkCompanyAccess(data.company_id);
+    if (!accessCheck.success) {
+      return { success: false, error: accessCheck.error };
+    }
+
+    const supabase = await createClient();
+
+    // 3. Get company details for logo cleanup
     const { data: existingCompany, error: companyError } = await supabase
       .from("companies")
-      .select("id, owner_id, logo_url")
+      .select("id, logo_url")
       .eq("id", data.company_id)
       .single();
 
     if (companyError || !existingCompany) {
-      return { success: false, error: "Công ty không tồn tại" };
-    }
-
-    if (existingCompany.owner_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền upload logo cho công ty này" };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
     }
 
     // 4. Extract file from FormData
     const file = data.logo.get("logo") as File;
     
     if (!file) {
-      return { success: false, error: "Không tìm thấy file logo" };
+      return { success: false, error: ERROR_MESSAGES.FILE.NOT_FOUND };
     }
 
     // 5. Validate file type and size
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
-      return { 
-        success: false, 
-        error: "Chỉ chấp nhận file ảnh định dạng JPEG, PNG hoặc WebP" 
-      };
+      return { success: false, error: ERROR_MESSAGES.FILE.INVALID_TYPE };
     }
 
-    const maxSize = 2 * 1024 * 1024; // 2MB
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      return { success: false, error: "Kích thước file không được vượt quá 2MB" };
+      return { success: false, error: ERROR_MESSAGES.FILE.TOO_LARGE };
     }
 
     // 6. Generate unique filename
@@ -86,7 +86,7 @@ export async function uploadCompanyLogo(params: UploadLogoParams): Promise<Resul
       });
 
     if (uploadError) {
-      return { success: false, error: `Lỗi upload file: ${uploadError.message}` };
+      return { success: false, error: ERROR_MESSAGES.FILE.UPLOAD_FAILED };
     }
 
     // 9. Get public URL
@@ -113,7 +113,7 @@ export async function uploadCompanyLogo(params: UploadLogoParams): Promise<Resul
         .from('company-logos')
         .remove([fileName]);
       
-      return { success: false, error: updateError.message };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.UPDATE_FAILED };
     }
 
     return { success: true, data: company };
@@ -121,6 +121,6 @@ export async function uploadCompanyLogo(params: UploadLogoParams): Promise<Resul
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi upload logo" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

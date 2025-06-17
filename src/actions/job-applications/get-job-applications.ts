@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import type { JobApplicationsFilter, DatabaseJobApplication } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const filtersSchema = z.object({
   job_id: z.number().optional(),
@@ -24,16 +26,17 @@ export async function getJobApplications(
   error: string 
 }> {
   try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
+    // 1. Validate input
     const validatedFilters = filtersSchema.parse(filters);
 
-    // Base query for applications with all necessary joins
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    // 3. Build query
+    const supabase = await createClient();
     let query = supabase
       .from("applications")
       .select(`
@@ -77,13 +80,12 @@ export async function getJobApplications(
       query = query.lte("applied_at", validatedFilters.applied_before);
     }
 
-    // Execute query with pagination
+    // 4. Execute query with pagination
     const { data: applications, error, count } = await query
       .range(validatedFilters.offset, validatedFilters.offset + validatedFilters.limit - 1);
 
     if (error) {
-      console.error("Error fetching job applications:", error);
-      return { success: false, error: "Không thể tải danh sách hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return {
@@ -94,12 +96,10 @@ export async function getJobApplications(
       },
     };
   } catch (error) {
-    console.error("Error in getJobApplications:", error);
-    
     if (error instanceof z.ZodError) {
       return { success: false, error: "Bộ lọc không hợp lệ" };
     }
     
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

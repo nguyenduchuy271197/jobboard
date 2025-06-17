@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 type CompanyStatistics = {
   total_companies: number;
@@ -38,27 +40,13 @@ type Result =
 
 export async function getCompanyStatistics(): Promise<Result> {
   try {
-    // 1. Auth check
+    // 1. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
-
-    // 2. Check admin role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || profile?.role !== "admin") {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
 
     // 3. Calculate date ranges
     const now = new Date();
@@ -212,6 +200,6 @@ export async function getCompanyStatistics(): Promise<Result> {
 
     return { success: true, data: statistics };
   } catch {
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thống kê" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

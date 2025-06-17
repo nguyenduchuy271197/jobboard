@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const withdrawSchema = z.object({
   id: z.number().positive(),
@@ -17,16 +19,19 @@ export async function withdrawApplication(
   error: string 
 }> {
   try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
+    // 1. Validate input
     const { id: applicationId } = withdrawSchema.parse({ id });
 
-    // First, verify the application exists and belongs to the user
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user } = authCheck;
+
+    // 3. Verify application exists and belongs to user
+    const supabase = await createClient();
     const { data: application, error: appError } = await supabase
       .from("applications")
       .select("id, applicant_id, status")
@@ -34,28 +39,27 @@ export async function withdrawApplication(
       .single();
 
     if (appError || !application) {
-      return { success: false, error: "Hồ sơ ứng tuyển không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.NOT_FOUND };
     }
 
     // Check if user owns this application
     if (application.applicant_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền rút lại hồ sơ ứng tuyển này" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.UNAUTHORIZED_WITHDRAW };
     }
 
     // Check if application can be withdrawn
     if (application.status === "accepted" || application.status === "rejected") {
-      return { success: false, error: "Không thể rút lại hồ sơ ứng tuyển đã được chấp nhận hoặc từ chối" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.CANNOT_WITHDRAW };
     }
 
-    // Delete the application
+    // 4. Delete the application
     const { error: deleteError } = await supabase
       .from("applications")
       .delete()
       .eq("id", applicationId);
 
     if (deleteError) {
-      console.error("Error withdrawing job application:", deleteError);
-      return { success: false, error: "Không thể rút lại hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.WITHDRAW_FAILED };
     }
 
     return {
@@ -63,12 +67,10 @@ export async function withdrawApplication(
       message: "Đã rút lại hồ sơ ứng tuyển thành công",
     };
   } catch (error) {
-    console.error("Error in withdrawApplication:", error);
-    
     if (error instanceof z.ZodError) {
       return { success: false, error: "ID hồ sơ ứng tuyển không hợp lệ" };
     }
     
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -3,11 +3,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { JobSeekerProfile } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const createProfileSchema = z.object({
-  headline: z.string().min(1, "Chức danh không được để trống").max(255, "Chức danh không được quá 255 ký tự"),
-  summary: z.string().min(1, "Mô tả bản thân không được để trống"),
-  skills: z.array(z.string()).min(1, "Phải có ít nhất một kỹ năng"),
+  headline: z.string()
+    .min(1, "Chức danh không được để trống")
+    .max(255, "Chức danh không được quá 255 ký tự")
+    .trim(),
+  summary: z.string()
+    .min(1, "Mô tả bản thân không được để trống")
+    .trim(),
+  skills: z.array(z.string().trim()).min(1, "Phải có ít nhất một kỹ năng"),
   experience_level: z.enum(["entry_level", "mid_level", "senior_level", "executive"]),
   preferred_location_id: z.number().int().positive("ID địa điểm không hợp lệ").optional(),
   preferred_salary_min: z.number().min(0, "Mức lương tối thiểu không hợp lệ").optional(),
@@ -36,15 +43,16 @@ export async function createJobSeekerProfile(params: CreateProfileParams): Promi
     // 1. Validate input
     const data = createProfileSchema.parse(params);
 
-    // 2. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để tạo hồ sơ" };
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
+    const { user } = authCheck;
+
     // 3. Check if profile already exists
+    const supabase = await createClient();
     const { data: existingProfile, error: checkError } = await supabase
       .from("job_seeker_profiles")
       .select("user_id")
@@ -52,14 +60,14 @@ export async function createJobSeekerProfile(params: CreateProfileParams): Promi
       .single();
 
     if (checkError && checkError.code !== "PGRST116") {
-      return { success: false, error: "Lỗi khi kiểm tra hồ sơ hiện tại" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (existingProfile) {
       return { success: false, error: "Bạn đã có hồ sơ ứng viên" };
     }
 
-    // 4. Check if location exists (if provided)
+    // 4. Validate location exists (if provided)
     if (data.preferred_location_id) {
       const { data: location, error: locationError } = await supabase
         .from("locations")
@@ -96,7 +104,7 @@ export async function createJobSeekerProfile(params: CreateProfileParams): Promi
       .single();
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: "Không thể tạo hồ sơ ứng viên" };
     }
 
     return { success: true, data: profile };
@@ -104,6 +112,6 @@ export async function createJobSeekerProfile(params: CreateProfileParams): Promi
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi tạo hồ sơ ứng viên" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

@@ -3,10 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Profile, UserRole } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAdminAuth } from "@/lib/auth-utils";
 
 const changeRoleSchema = z.object({
-  userId: z.string().uuid("User ID không hợp lệ"),
-  newRole: z.enum(["job_seeker", "employer", "admin"] as const),
+  userId: z.string().uuid(ERROR_MESSAGES.VALIDATION.INVALID_UUID),
+  newRole: z.enum(["job_seeker", "employer", "admin"] as const, {
+    errorMap: () => ({ message: ERROR_MESSAGES.USER.INVALID_ROLE }),
+  }),
 });
 
 type ChangeRoleParams = z.infer<typeof changeRoleSchema>;
@@ -19,52 +23,35 @@ export async function changeUserRole(params: ChangeRoleParams): Promise<Result> 
     // 1. Validate input
     const data = changeRoleSchema.parse(params);
 
-    // 2. Create Supabase client and check auth
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { success: false, error: "Chưa đăng nhập" };
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // 3. Check if current user is admin
-    const { data: currentUserProfile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    const { user: currentUser } = authCheck;
 
-    if (profileError) {
-      return { success: false, error: profileError.message };
-    }
-
-    if (currentUserProfile?.role !== "admin") {
-      return { success: false, error: "Chỉ admin mới có thể thay đổi role" };
+    // 3. Prevent self-demotion safety check
+    if (data.userId === currentUser.id && data.newRole !== "admin") {
+      return { 
+        success: false, 
+        error: ERROR_MESSAGES.USER.CANNOT_CHANGE_OWN_ROLE 
+      };
     }
 
     // 4. Check if target user exists
+    const supabase = await createClient();
     const { data: targetUser, error: targetUserError } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", data.userId)
       .single();
 
-    if (targetUserError) {
-      return { success: false, error: "Người dùng không tồn tại" };
+    if (targetUserError || !targetUser) {
+      return { success: false, error: ERROR_MESSAGES.USER.NOT_FOUND };
     }
 
-    if (!targetUser) {
-      return { success: false, error: "Người dùng không tồn tại" };
-    }
-
-    // 5. Prevent changing own role to non-admin (safety check)
-    if (data.userId === user.id && data.newRole !== "admin") {
-      return { success: false, error: "Không thể thay đổi role của chính mình khỏi admin" };
-    }
-
-    // 6. Update user role
+    // 5. Update user role
     const { data: updatedProfile, error: updateError } = await supabase
       .from("profiles")
       .update({ 
@@ -75,12 +62,8 @@ export async function changeUserRole(params: ChangeRoleParams): Promise<Result> 
       .select()
       .single();
 
-    if (updateError) {
-      return { success: false, error: updateError.message };
-    }
-
-    if (!updatedProfile) {
-      return { success: false, error: "Không thể cập nhật role" };
+    if (updateError || !updatedProfile) {
+      return { success: false, error: ERROR_MESSAGES.USER.UPDATE_FAILED };
     }
 
     return { success: true, data: updatedProfile };
@@ -88,6 +71,6 @@ export async function changeUserRole(params: ChangeRoleParams): Promise<Result> 
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi thay đổi role" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

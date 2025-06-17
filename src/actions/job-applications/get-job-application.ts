@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import type { DatabaseJobApplication } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const paramsSchema = z.object({
   id: z.number().positive(),
@@ -18,15 +20,17 @@ export async function getJobApplication(
   error: string 
 }> {
   try {
-    const supabase = await createClient();
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
+    // 1. Validate input
     const { id: applicationId } = paramsSchema.parse({ id });
 
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    // 3. Fetch application
+    const supabase = await createClient();
     const { data: application, error } = await supabase
       .from("applications")
       .select(`
@@ -53,14 +57,13 @@ export async function getJobApplication(
 
     if (error) {
       if (error.code === "PGRST116") {
-        return { success: false, error: "Hồ sơ ứng tuyển không tồn tại" };
+        return { success: false, error: ERROR_MESSAGES.APPLICATION.NOT_FOUND };
       }
-      console.error("Error fetching job application:", error);
-      return { success: false, error: "Không thể tải hồ sơ ứng tuyển" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (!application) {
-      return { success: false, error: "Hồ sơ ứng tuyển không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.APPLICATION.NOT_FOUND };
     }
 
     return {
@@ -68,12 +71,10 @@ export async function getJobApplication(
       data: application,
     };
   } catch (error) {
-    console.error("Error in getJobApplication:", error);
-    
     if (error instanceof z.ZodError) {
       return { success: false, error: "ID hồ sơ ứng tuyển không hợp lệ" };
     }
     
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

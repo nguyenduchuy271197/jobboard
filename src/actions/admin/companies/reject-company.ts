@@ -1,11 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 
 const schema = z.object({
-  company_id: z.number().positive(),
-  reason: z.string().min(1, "Lý do từ chối là bắt buộc"),
+  company_id: z.number().positive(ERROR_MESSAGES.VALIDATION.INVALID_ID),
+  reason: z.string().min(1, ERROR_MESSAGES.VALIDATION.REQUIRED_FIELD).transform(val => val.trim()),
 });
 
 type Result = 
@@ -19,29 +21,15 @@ export async function rejectCompany(
     // 1. Validate input
     const { company_id, reason } = schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
 
-    // 3. Check admin role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || profile?.role !== "admin") {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
-
-    // 4. Check if company exists
+    // 3. Check if company exists
     const { data: existingCompany, error: companyError } = await supabase
       .from("companies")
       .select("id, name, is_verified, owner_id")
@@ -49,14 +37,14 @@ export async function rejectCompany(
       .single();
 
     if (companyError || !existingCompany) {
-      return { success: false, error: "Không tìm thấy công ty" };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.NOT_FOUND };
     }
 
     if (existingCompany.is_verified) {
       return { success: false, error: "Không thể từ chối công ty đã được xác minh" };
     }
 
-    // 5. Update company to rejected status (keeping is_verified as false)
+    // 4. Update company to rejected status (keeping is_verified as false)
     const { error: updateError } = await supabase
       .from("companies")
       .update({
@@ -66,7 +54,7 @@ export async function rejectCompany(
       .eq("id", company_id);
 
     if (updateError) {
-      return { success: false, error: "Không thể từ chối công ty" };
+      return { success: false, error: ERROR_MESSAGES.COMPANY.UPDATE_FAILED };
     }
 
     // TODO: Send notification email to company owner with rejection reason
@@ -78,6 +66,6 @@ export async function rejectCompany(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

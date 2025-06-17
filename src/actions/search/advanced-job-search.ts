@@ -1,21 +1,23 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { checkAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { DatabaseJob, EmploymentType, ExperienceLevel } from "@/types/custom.types";
 
 const schema = z.object({
-  query: z.string().optional(),
-  industry_id: z.number().optional(),
-  location_id: z.number().optional(),
-  company_id: z.number().optional(),
+  query: z.string().trim().optional(),
+  industry_id: z.number().positive().optional(),
+  location_id: z.number().positive().optional(),
+  company_id: z.number().positive().optional(),
   employment_type: z.enum(["full_time", "part_time", "contract", "internship", "freelance"]).optional(),
   experience_level: z.enum(["entry_level", "mid_level", "senior_level", "executive"]).optional(),
   salary_min: z.number().min(0).optional(),
   salary_max: z.number().min(0).optional(),
   is_remote: z.boolean().optional(),
   is_featured: z.boolean().optional(),
-  skills: z.array(z.string()).optional(),
+  skills: z.array(z.string().trim()).optional(),
   posted_within_days: z.number().min(1).max(365).optional(),
   page: z.number().min(1).optional().default(1),
   limit: z.number().min(1).max(100).optional().default(20),
@@ -51,23 +53,21 @@ type Result =
 
 export async function advancedJobSearch(params: AdvancedJobSearchParams): Promise<Result> {
   try {
+    // Step 1: Validate input
     const data = schema.parse(params);
-    const supabase = await createClient();
 
-    // Kiểm tra authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để tìm kiếm" };
+    // Step 2: Check authentication
+    const authCheck = await checkAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // Tính offset cho pagination
+    const supabase = await createClient();
+
+    // Step 3: Calculate pagination offset
     const offset = (data.page - 1) * data.limit;
 
-    // Xây dựng query cơ bản
+    // Step 4: Build base query
     let query = supabase
       .from("jobs")
       .select(`
@@ -85,7 +85,7 @@ export async function advancedJobSearch(params: AdvancedJobSearchParams): Promis
       `, { count: "exact" })
       .eq("status", "published");
 
-    // Áp dụng filters
+    // Step 5: Apply search filters
     if (data.query) {
       query = query.or(`title.ilike.%${data.query}%,description.ilike.%${data.query}%,requirements.ilike.%${data.query}%`);
     }
@@ -123,7 +123,6 @@ export async function advancedJobSearch(params: AdvancedJobSearchParams): Promis
     }
 
     if (data.is_featured !== undefined) {
-      // Assuming there's a featured field in jobs table
       query = query.eq("is_featured", data.is_featured);
     }
 
@@ -137,22 +136,22 @@ export async function advancedJobSearch(params: AdvancedJobSearchParams): Promis
       query = query.gte("created_at", dateThreshold.toISOString());
     }
 
-    // Áp dụng sorting
-    query = query.order(data.sort_by, { ascending: data.sort_order === "asc" });
+    // Step 6: Apply sorting and pagination
+    query = query
+      .order(data.sort_by, { ascending: data.sort_order === "asc" })
+      .range(offset, offset + data.limit - 1);
 
-    // Áp dụng pagination
-    query = query.range(offset, offset + data.limit - 1);
-
+    // Step 7: Execute query
     const { data: jobsData, error: jobsError, count } = await query;
 
     if (jobsError) {
-      return { success: false, error: "Lỗi khi tìm kiếm công việc" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     const totalCount = count || 0;
     const totalPages = Math.ceil(totalCount / data.limit);
 
-    // Lấy thông tin filter names để hiển thị
+    // Step 8: Get filter names for display
     const filtersApplied: AdvancedJobSearchResult["filters_applied"] = {};
 
     if (data.industry_id) {
@@ -227,6 +226,6 @@ export async function advancedJobSearch(params: AdvancedJobSearchParams): Promis
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống khi tìm kiếm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

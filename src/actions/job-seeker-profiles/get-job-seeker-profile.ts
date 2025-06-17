@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { JobSeekerProfile } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const getJobSeekerProfileSchema = z.object({
   user_id: z.string().uuid("ID người dùng không hợp lệ"),
@@ -37,7 +38,7 @@ export async function getJobSeekerProfile(params: GetJobSeekerProfileParams): Pr
       if (error.code === "PGRST116") {
         return { success: false, error: "Hồ sơ ứng viên không tồn tại" };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (!profile) {
@@ -49,6 +50,6 @@ export async function getJobSeekerProfile(params: GetJobSeekerProfileParams): Pr
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy thông tin hồ sơ ứng viên" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

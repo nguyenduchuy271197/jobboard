@@ -1,11 +1,12 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import { Company } from "@/types/custom.types";
 
 const getCompaniesSchema = z.object({
-  search: z.string().optional(),
+  search: z.string().optional().transform(val => val?.trim()),
   industry_id: z.number().int().positive().optional(),
   location_id: z.number().int().positive().optional(),
   is_verified: z.boolean().optional(),
@@ -68,7 +69,7 @@ export async function getCompanies(params?: GetCompaniesParams): Promise<Result>
     const { data: companies, error } = await query;
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return { success: true, data: companies || [] };
@@ -76,6 +77,6 @@ export async function getCompanies(params?: GetCompaniesParams): Promise<Result>
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy danh sách công ty" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

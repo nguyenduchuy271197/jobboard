@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
+import { checkAuthWithProfile, checkCompanyAccess } from "@/lib/auth-utils";
 
 const deleteJobSchema = z.object({
   id: z.number().int().positive("ID việc làm không hợp lệ"),
@@ -17,15 +19,14 @@ export async function deleteJob(params: DeleteJobParams): Promise<Result> {
     // 1. Validate input
     const data = deleteJobSchema.parse(params);
 
-    // 2. Create Supabase client and get user
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return { success: false, error: "Bạn cần đăng nhập để xóa việc làm" };
+    // 2. Check authentication
+    const authCheck = await checkAuthWithProfile();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
     }
 
-    // 3. Check if job exists and user has permission
+    // 3. Check if job exists
+    const supabase = await createClient();
     const { data: existingJob, error: jobError } = await supabase
       .from("jobs")
       .select("id, title, company_id")
@@ -33,32 +34,23 @@ export async function deleteJob(params: DeleteJobParams): Promise<Result> {
       .single();
 
     if (jobError || !existingJob) {
-      return { success: false, error: "Việc làm không tồn tại" };
+      return { success: false, error: ERROR_MESSAGES.JOB.NOT_FOUND };
     }
 
-    // Check company ownership
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .select("owner_id")
-      .eq("id", existingJob.company_id)
-      .single();
-
-    if (companyError || !company) {
-      return { success: false, error: "Công ty không tồn tại" };
+    // 4. Check company access
+    const companyCheck = await checkCompanyAccess(existingJob.company_id);
+    if (!companyCheck.success) {
+      return { success: false, error: companyCheck.error };
     }
 
-    if (company.owner_id !== user.id) {
-      return { success: false, error: "Bạn không có quyền xóa việc làm này" };
-    }
-
-    // 4. Check for dependencies (job applications)
+    // 5. Check for dependencies (job applications)
     const { count: applicationCount, error: applicationError } = await supabase
       .from("applications")
       .select("id", { count: "exact", head: true })
       .eq("job_id", data.id);
 
     if (applicationError) {
-      return { success: false, error: "Lỗi khi kiểm tra đơn ứng tuyển liên quan" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (applicationCount && applicationCount > 0) {
@@ -68,14 +60,14 @@ export async function deleteJob(params: DeleteJobParams): Promise<Result> {
       };
     }
 
-    // 5. Delete job
+    // 6. Delete job
     const { error } = await supabase
       .from("jobs")
       .delete()
       .eq("id", data.id);
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.JOB.DELETE_FAILED };
     }
 
     return { success: true, data: { id: data.id } };
@@ -83,6 +75,6 @@ export async function deleteJob(params: DeleteJobParams): Promise<Result> {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi xóa việc làm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

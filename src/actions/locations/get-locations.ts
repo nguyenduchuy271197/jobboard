@@ -3,9 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { Location } from "@/types/custom.types";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const getLocationsSchema = z.object({
-  search: z.string().optional(),
+  search: z.string().trim().optional(),
   limit: z.number().min(1).max(100).optional(),
   offset: z.number().min(0).optional(),
 }).optional();
@@ -20,10 +21,8 @@ export async function getLocations(params?: GetLocationsParams): Promise<Result>
     // 1. Validate input
     const data = getLocationsSchema?.parse(params) || {};
 
-    // 2. Create Supabase client
+    // 2. Create Supabase client and build query
     const supabase = await createClient();
-
-    // 3. Build query
     let query = supabase
       .from("locations")
       .select("*")
@@ -42,11 +41,11 @@ export async function getLocations(params?: GetLocationsParams): Promise<Result>
       query = query.range(data.offset, data.offset + (data.limit || 50) - 1);
     }
 
-    // 4. Execute query
+    // 3. Execute query
     const { data: locations, error } = await query;
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     return { success: true, data: locations || [] };
@@ -54,6 +53,6 @@ export async function getLocations(params?: GetLocationsParams): Promise<Result>
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi lấy danh sách địa điểm" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

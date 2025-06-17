@@ -1,13 +1,15 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 import type { BulkUpdateJobsData } from "@/types/custom.types";
 
 const schema = z.object({
-  job_ids: z.array(z.number()).min(1).max(50),
+  job_ids: z.array(z.number().positive()).min(1).max(50),
   action: z.enum(["approve", "reject", "archive", "delete"]),
-  reason: z.string().optional(),
+  reason: z.string().optional().transform(val => val?.trim()),
 });
 
 type Result = { 
@@ -23,38 +25,27 @@ type Result = {
 
 export async function bulkUpdateJobs(params: BulkUpdateJobsData): Promise<Result> {
   try {
+    // 1. Validate input
     const data = schema.parse(params);
 
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Vui lòng đăng nhập để thực hiện thao tác này" };
-    }
-
-    // Kiểm tra quyền admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "admin") {
-      return { success: false, error: "Bạn không có quyền thực hiện thao tác này" };
-    }
 
     let updated = 0;
     let failed = 0;
 
-    // Xử lý từng job
+    // 3. Process each job
     for (const jobId of data.job_ids) {
       try {
         const updateData: Partial<{
           status: "draft" | "pending_approval" | "published" | "closed" | "archived";
           updated_at: string;
+          published_at?: string;
         }> = {
           updated_at: new Date().toISOString(),
         };
@@ -62,16 +53,16 @@ export async function bulkUpdateJobs(params: BulkUpdateJobsData): Promise<Result
         switch (data.action) {
           case "approve":
             updateData.status = "published";
+            updateData.published_at = new Date().toISOString();
             break;
           case "reject":
             updateData.status = "draft";
             break;
-
           case "archive":
             updateData.status = "archived";
             break;
           case "delete":
-            // Kiểm tra có applications không
+            // Check for applications
             const { data: applications } = await supabase
               .from("applications")
               .select("id")
@@ -122,6 +113,6 @@ export async function bulkUpdateJobs(params: BulkUpdateJobsData): Promise<Result
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Lỗi hệ thống" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 

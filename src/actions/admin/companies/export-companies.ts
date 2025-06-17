@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth-utils";
+import { ERROR_MESSAGES } from "@/constants/error-messages";
 import { z } from "zod";
 
 const schema = z.object({
@@ -25,27 +27,14 @@ export async function exportCompanies(
     // 1. Validate input
     const validatedParams = schema.parse(params);
 
-    // 2. Auth check
+    // 2. Check admin authentication
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.success) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const { user } = authCheck;
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return { success: false, error: "Chưa đăng nhập" };
-    }
-
-    // 3. Check admin role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || profile?.role !== "admin") {
-      return { success: false, error: "Không có quyền truy cập" };
-    }
 
     // 4. Build query
     let query = supabase
@@ -80,7 +69,7 @@ export async function exportCompanies(
       .order("created_at", { ascending: false });
 
     if (companiesError) {
-      return { success: false, error: "Không thể lấy dữ liệu công ty" };
+      return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
     if (!companies || companies.length === 0) {
@@ -172,6 +161,6 @@ export async function exportCompanies(
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: "Đã có lỗi xảy ra khi xuất dữ liệu" };
+    return { success: false, error: ERROR_MESSAGES.GENERIC.UNEXPECTED_ERROR };
   }
 } 
