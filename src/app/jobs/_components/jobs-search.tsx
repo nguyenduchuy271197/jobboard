@@ -110,11 +110,11 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Ngành nghề</label>
               <Select
-                value={filters.industry_id?.toString() || ""}
+                value={filters.industry_id?.toString() || "all"}
                 onValueChange={(value) =>
                   handleFilterChange(
                     "industry_id",
-                    value ? parseInt(value) : undefined
+                    value === "all" ? undefined : parseInt(value)
                   )
                 }
               >
@@ -123,7 +123,7 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
                   <SelectValue placeholder="Chọn ngành" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tất cả ngành</SelectItem>
+                  <SelectItem value="all">Tất cả ngành</SelectItem>
                   {industries.map((industry) => (
                     <SelectItem
                       key={industry.id}
@@ -139,11 +139,11 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Địa điểm</label>
               <Select
-                value={filters.location_id?.toString() || ""}
+                value={filters.location_id?.toString() || "all"}
                 onValueChange={(value) =>
                   handleFilterChange(
                     "location_id",
-                    value ? parseInt(value) : undefined
+                    value === "all" ? undefined : parseInt(value)
                   )
                 }
               >
@@ -152,7 +152,7 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
                   <SelectValue placeholder="Chọn địa điểm" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tất cả địa điểm</SelectItem>
+                  <SelectItem value="all">Tất cả địa điểm</SelectItem>
                   {locations.map((location) => (
                     <SelectItem
                       key={location.id}
@@ -168,11 +168,11 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Loại hình</label>
               <Select
-                value={filters.employment_type || ""}
+                value={filters.employment_type || "all"}
                 onValueChange={(value) =>
                   handleFilterChange(
                     "employment_type",
-                    (value as EmploymentType) || undefined
+                    value === "all" ? undefined : (value as EmploymentType)
                   )
                 }
               >
@@ -180,7 +180,7 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
                   <SelectValue placeholder="Loại hình" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tất cả</SelectItem>
+                  <SelectItem value="all">Tất cả</SelectItem>
                   <SelectItem value="full_time">Toàn thời gian</SelectItem>
                   <SelectItem value="part_time">Bán thời gian</SelectItem>
                   <SelectItem value="contract">Hợp đồng</SelectItem>
@@ -193,11 +193,11 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium">Kinh nghiệm</label>
               <Select
-                value={filters.experience_level || ""}
+                value={filters.experience_level || "all"}
                 onValueChange={(value) =>
                   handleFilterChange(
                     "experience_level",
-                    (value as ExperienceLevel) || undefined
+                    value === "all" ? undefined : (value as ExperienceLevel)
                   )
                 }
               >
@@ -205,7 +205,7 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
                   <SelectValue placeholder="Cấp độ" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tất cả</SelectItem>
+                  <SelectItem value="all">Tất cả</SelectItem>
                   <SelectItem value="entry_level">Mới bắt đầu</SelectItem>
                   <SelectItem value="mid_level">Trung cấp</SelectItem>
                   <SelectItem value="senior_level">Cao cấp</SelectItem>
