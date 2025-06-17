@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { Job } from "@/types/custom.types";
+import { DatabaseJob } from "@/types/custom.types";
 import { ERROR_MESSAGES } from "@/constants/error-messages";
 
 const getJobsSchema = z.object({
@@ -23,7 +23,7 @@ const getJobsSchema = z.object({
 
 type GetJobsParams = z.infer<typeof getJobsSchema>;
 type Result = 
-  | { success: true; data: Job[] } 
+  | { success: true; data: DatabaseJob[] } 
   | { success: false; error: string };
 
 export async function getJobs(params?: GetJobsParams): Promise<Result> {
@@ -115,7 +115,7 @@ export async function getJobs(params?: GetJobsParams): Promise<Result> {
       return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };
     }
 
-    return { success: true, data: jobs || [] };
+    return { success: true, data: (jobs || []) as DatabaseJob[] };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };

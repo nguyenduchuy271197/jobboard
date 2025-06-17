@@ -1,37 +1,51 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import {
-  MapPin,
   Building2,
+  MapPin,
   Clock,
   DollarSign,
+  Eye,
   ChevronLeft,
   ChevronRight,
   Star,
-  Eye,
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
+import { useState, useMemo } from "react";
 import { useJobs } from "@/hooks/jobs";
 import { JobDetailsDialog } from "./job-details-dialog";
-import { JobsLoading } from "./jobs-loading";
-import { JobSearchFilters } from "./jobs-search";
 import {
   DatabaseJob,
   EmploymentType,
   ExperienceLevel,
 } from "@/types/custom.types";
-import { formatDistanceToNow } from "date-fns";
-import { vi } from "date-fns/locale";
+import React from "react";
+import Image from "next/image";
+
+const JOBS_PER_PAGE = 10;
+
+interface JobSearchFilters {
+  search?: string;
+  industry_id?: number;
+  location_id?: number;
+  employment_type?: EmploymentType;
+  experience_level?: ExperienceLevel;
+  is_remote?: boolean;
+  salary_min?: number;
+}
+
+// Extended type to include is_featured which might be computed runtime
+type ExtendedDatabaseJob = DatabaseJob & {
+  is_featured?: boolean;
+};
 
 interface JobsListProps {
   filters?: JobSearchFilters;
 }
-
-const JOBS_PER_PAGE = 10;
 
 const employmentTypeLabels: Record<EmploymentType, string> = {
   full_time: "Toàn thời gian",
@@ -52,18 +66,14 @@ export function JobsList({ filters = {} }: JobsListProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
 
-  const offset = (currentPage - 1) * JOBS_PER_PAGE;
+  const { data: jobs = [], isLoading, error } = useJobs(filters);
 
-  const {
-    data: jobs = [],
-    isLoading,
-    error,
-  } = useJobs({
-    ...filters,
-    limit: JOBS_PER_PAGE,
-    offset,
-    status: "published",
-  });
+  // Pagination logic
+  const paginatedJobs = useMemo(() => {
+    const startIndex = (currentPage - 1) * JOBS_PER_PAGE;
+    const endIndex = startIndex + JOBS_PER_PAGE;
+    return jobs.slice(startIndex, endIndex);
+  }, [jobs, currentPage]);
 
   const handleJobClick = (jobId: number) => {
     setSelectedJobId(jobId);
@@ -78,32 +88,42 @@ export function JobsList({ filters = {} }: JobsListProps) {
     max?: number | null,
     currency?: string | null
   ) => {
-    if (!min && !max) return "Thỏa thuận";
+    if (!min && !max) return "Lương thỏa thuận";
 
     const formatAmount = (amount: number) => {
-      return new Intl.NumberFormat("vi-VN").format(amount);
+      if (currency === "VND") {
+        return (amount / 1000000).toFixed(0) + " triệu";
+      }
+      return amount.toLocaleString();
     };
 
-    const currencySymbol =
-      currency === "USD" ? "$" : currency === "VND" ? "₫" : "";
-
     if (min && max) {
-      return `${formatAmount(min)} - ${formatAmount(max)} ${currencySymbol}`;
+      return `${formatAmount(min)} - ${formatAmount(max)} ${currency || "VND"}`;
     }
-
     if (min) {
-      return `Từ ${formatAmount(min)} ${currencySymbol}`;
+      return `Từ ${formatAmount(min)} ${currency || "VND"}`;
     }
-
     if (max) {
-      return `Lên đến ${formatAmount(max)} ${currencySymbol}`;
+      return `Lên đến ${formatAmount(max)} ${currency || "VND"}`;
     }
-
-    return "Thỏa thuận";
+    return "Lương thỏa thuận";
   };
 
+  // Reset to first page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
   if (isLoading) {
-    return <JobsLoading />;
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <p className="text-muted-foreground">
+            Đang tải danh sách công việc. Vui lòng chờ đợi...
+          </p>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (error) {
@@ -157,16 +177,18 @@ export function JobsList({ filters = {} }: JobsListProps) {
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Hiển thị {jobs.length} công việc
-          {filters.search && <span> cho từ khóa "{filters.search}"</span>}
+          {filters.search && (
+            <span> cho từ khóa &ldquo;{filters.search}&rdquo;</span>
+          )}
         </p>
       </div>
 
       {/* Jobs Grid */}
       <div className="space-y-4">
-        {jobs.map((job) => (
+        {paginatedJobs.map((job) => (
           <JobCard
             key={job.id}
-            job={job}
+            job={job as ExtendedDatabaseJob}
             onJobClick={handleJobClick}
             formatSalary={formatSalary}
           />
@@ -225,7 +247,7 @@ export function JobsList({ filters = {} }: JobsListProps) {
 }
 
 interface JobCardProps {
-  job: DatabaseJob;
+  job: ExtendedDatabaseJob;
   onJobClick: (jobId: number) => void;
   formatSalary: (
     min?: number | null,
@@ -246,9 +268,11 @@ function JobCard({ job, onJobClick, formatSalary }: JobCardProps) {
             {/* Header */}
             <div className="flex items-start gap-3">
               {job.company?.logo_url && (
-                <img
+                <Image
                   src={job.company.logo_url}
                   alt={job.company.name}
+                  width={48}
+                  height={48}
                   className="w-12 h-12 rounded-lg object-cover"
                 />
               )}

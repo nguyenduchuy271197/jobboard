@@ -31,6 +31,14 @@ export interface JobSearchFilters {
   salary_min?: number;
 }
 
+type JobSearchFilterValue =
+  | string
+  | number
+  | EmploymentType
+  | ExperienceLevel
+  | boolean
+  | undefined;
+
 export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<JobSearchFilters>({});
@@ -46,7 +54,10 @@ export function JobsSearch({ onFiltersChange }: JobsSearchProps) {
     onFiltersChange?.(newFilters);
   };
 
-  const handleFilterChange = (key: keyof JobSearchFilters, value: any) => {
+  const handleFilterChange = (
+    key: keyof JobSearchFilters,
+    value: JobSearchFilterValue
+  ) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
     onFiltersChange?.(newFilters);

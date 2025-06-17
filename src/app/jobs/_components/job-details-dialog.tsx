@@ -6,29 +6,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  MapPin,
   Building2,
+  MapPin,
   Clock,
   DollarSign,
   Calendar,
-  Users,
-  Globe,
   Star,
-  User,
+  Globe,
+  ExternalLink,
   Briefcase,
   CheckCircle,
+  User,
   X,
-  ExternalLink,
 } from "lucide-react";
-import { useJob } from "@/hooks/jobs";
-import { EmploymentType, ExperienceLevel } from "@/types/custom.types";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
+import { useJob } from "@/hooks/jobs";
+import {
+  DatabaseJob,
+  EmploymentType,
+  ExperienceLevel,
+} from "@/types/custom.types";
+import Image from "next/image";
 
 interface JobDetailsDialogProps {
   jobId: number;
@@ -49,6 +52,11 @@ const experienceLevelLabels: Record<ExperienceLevel, string> = {
   mid_level: "Trung cấp",
   senior_level: "Cao cấp",
   executive: "Điều hành",
+};
+
+// Extended type to include is_featured which might be computed runtime
+type ExtendedDatabaseJob = DatabaseJob & {
+  is_featured?: boolean;
 };
 
 export function JobDetailsDialog({
@@ -99,7 +107,7 @@ export function JobDetailsDialog({
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6">
+        <div className="flex-1 px-6">
           {isLoading && (
             <div className="space-y-4 animate-pulse">
               <div className="h-8 bg-muted rounded" />
@@ -126,10 +134,12 @@ export function JobDetailsDialog({
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
                   {job.company?.logo_url && (
-                    <img
+                    <Image
                       src={job.company.logo_url}
                       alt={job.company.name}
-                      className="w-16 h-16 rounded-lg object-cover"
+                      width={64}
+                      height={64}
+                      className="rounded-lg object-cover"
                     />
                   )}
                   <div className="flex-1">
@@ -149,7 +159,7 @@ export function JobDetailsDialog({
                           )}
                         </div>
                       </div>
-                      {job.is_featured && (
+                      {(job as ExtendedDatabaseJob).is_featured && (
                         <Badge variant="default" className="text-sm">
                           Nổi bật
                         </Badge>
@@ -330,7 +340,7 @@ export function JobDetailsDialog({
               )}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {/* Footer Actions */}
         {job && (

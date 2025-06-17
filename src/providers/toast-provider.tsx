@@ -1,0 +1,14 @@
+import { Toaster } from "@/components/ui/sonner";
+
+export function ToastProvider() {
+  return (
+    <Toaster
+      position="top-right"
+      richColors
+      closeButton
+      toastOptions={{
+        duration: 4000,
+      }}
+    />
+  );
+}
