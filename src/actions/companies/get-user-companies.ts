@@ -12,8 +12,13 @@ const getUserCompaniesSchema = z.object({
 }).optional();
 
 type GetUserCompaniesParams = z.infer<typeof getUserCompaniesSchema>;
+type CompanyWithRelations = Company & {
+  industry?: { id: number; name: string; slug: string } | null;
+  location?: { id: number; name: string; slug: string } | null;
+};
+
 type Result = 
-  | { success: true; data: Company[] } 
+  | { success: true; data: CompanyWithRelations[] } 
   | { success: false; error: string };
 
 export async function getUserCompanies(params?: GetUserCompaniesParams): Promise<Result> {
