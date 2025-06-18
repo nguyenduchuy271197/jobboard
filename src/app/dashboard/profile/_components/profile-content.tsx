@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
+import { getExperienceLevelLabel, formatSalary } from "@/constants/labels";
 
 export function ProfileContent() {
   const [showDialog, setShowDialog] = useState(false);
@@ -55,38 +56,6 @@ export function ProfileContent() {
   }
 
   const hasProfile = !!profile;
-
-  const getExperienceLevelLabel = (level: string) => {
-    const labels = {
-      entry_level: "Mới bắt đầu",
-      mid_level: "Trung cấp",
-      senior_level: "Cao cấp",
-      executive: "Điều hành",
-    };
-    return labels[level as keyof typeof labels] || level;
-  };
-
-  const formatSalary = (min?: number | null, max?: number | null) => {
-    if (!min && !max) return "Thỏa thuận";
-
-    const formatNumber = (num: number) => {
-      if (num >= 1000000) {
-        return `${(num / 1000000).toFixed(num % 1000000 === 0 ? 0 : 1)}M`;
-      }
-      return new Intl.NumberFormat("vi-VN").format(num);
-    };
-
-    if (min && max) {
-      return `${formatNumber(min)} - ${formatNumber(max)} VNĐ`;
-    }
-    if (min) {
-      return `Từ ${formatNumber(min)} VNĐ`;
-    }
-    if (max) {
-      return `Lên đến ${formatNumber(max)} VNĐ`;
-    }
-    return "Thỏa thuận";
-  };
 
   return (
     <div className="space-y-6">

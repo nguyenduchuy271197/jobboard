@@ -8,7 +8,18 @@ import { checkAuthWithProfile } from "@/lib/auth-utils";
 
 const createApplicationSchema = z.object({
   job_id: z.number().positive(),
-  cover_letter: z.string().min(1).max(2000).trim().optional(),
+  cover_letter: z
+    .string()
+    .trim()
+    .refine(
+      (val) => val === "" || val.length >= 50,
+      "Thư xin việc phải có ít nhất 50 ký tự"
+    )
+    .refine(
+      (val) => val.length <= 2000,
+      "Thư xin việc không được quá 2000 ký tự"
+    )
+    .optional(),
 }).strict();
 
 export async function createApplication(
@@ -82,7 +93,9 @@ export async function createApplication(
       .insert({
         job_id: validatedData.job_id,
         applicant_id: user.id,
-        cover_letter: validatedData.cover_letter,
+        cover_letter: validatedData.cover_letter && validatedData.cover_letter.trim() 
+          ? validatedData.cover_letter.trim() 
+          : null,
         status: "pending",
       })
       .select(`

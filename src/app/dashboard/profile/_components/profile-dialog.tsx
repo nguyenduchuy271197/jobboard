@@ -40,6 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, X, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { EXPERIENCE_LEVEL_LABELS } from "@/constants/labels";
 
 const profileSchema = z
   .object({
@@ -209,18 +210,15 @@ export function ProfileDialog({
     );
   };
 
-  const experienceLevels = [
-    { value: "entry_level", label: "Mới bắt đầu" },
-    { value: "mid_level", label: "Trung cấp" },
-    { value: "senior_level", label: "Cao cấp" },
-    { value: "executive", label: "Điều hành" },
-  ];
+  const experienceLevels = Object.entries(EXPERIENCE_LEVEL_LABELS).map(
+    ([value, label]) => ({ value, label })
+  );
 
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Chỉnh sửa hồ sơ" : "Tạo hồ sơ ứng viên"}
@@ -332,71 +330,73 @@ export function ProfileDialog({
               )}
             />
 
-            {/* Experience Level */}
-            <FormField
-              control={form.control}
-              name="experience_level"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cấp độ kinh nghiệm *</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn cấp độ kinh nghiệm" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {experienceLevels.map((level) => (
-                        <SelectItem key={level.value} value={level.value}>
-                          {level.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              {/* Experience Level */}
+              <FormField
+                control={form.control}
+                name="experience_level"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cấp độ kinh nghiệm *</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Chọn cấp độ kinh nghiệm" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {experienceLevels.map((level) => (
+                          <SelectItem key={level.value} value={level.value}>
+                            {level.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            {/* Preferred Location */}
-            <FormField
-              control={form.control}
-              name="preferred_location_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Địa điểm ưu tiên</FormLabel>
-                  <Select
-                    onValueChange={(value) =>
-                      field.onChange(
-                        value && value !== "0" ? parseInt(value) : undefined
-                      )
-                    }
-                    value={field.value?.toString() || "0"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn địa điểm ưu tiên" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="0">Không chọn</SelectItem>
-                      {locations.map((location) => (
-                        <SelectItem
-                          key={location.id}
-                          value={location.id.toString()}
-                        >
-                          {location.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              {/* Preferred Location */}
+              <FormField
+                control={form.control}
+                name="preferred_location_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Địa điểm ưu tiên</FormLabel>
+                    <Select
+                      onValueChange={(value) =>
+                        field.onChange(
+                          value && value !== "0" ? parseInt(value) : undefined
+                        )
+                      }
+                      value={field.value?.toString() || "0"}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Chọn địa điểm ưu tiên" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="0">Không chọn</SelectItem>
+                        {locations.map((location) => (
+                          <SelectItem
+                            key={location.id}
+                            value={location.id.toString()}
+                          >
+                            {location.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {/* Salary Range */}
             <div className="grid grid-cols-2 gap-4">

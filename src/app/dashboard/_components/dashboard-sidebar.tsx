@@ -11,8 +11,6 @@ import {
   Building,
   Briefcase,
   FileText,
-  Search,
-  Settings,
   LogOut,
   Users,
   BarChart3,
@@ -63,13 +61,6 @@ export default function DashboardSidebar({ profile }: DashboardSidebarProps) {
       icon: User,
       roles: ["job_seeker", "employer", "admin"],
     },
-    // Job Seeker specific
-    {
-      name: "Tìm việc làm",
-      href: "/dashboard/jobs",
-      icon: Search,
-      roles: ["job_seeker"],
-    },
     {
       name: "Đơn ứng tuyển",
       href: "/dashboard/applications",
@@ -113,12 +104,6 @@ export default function DashboardSidebar({ profile }: DashboardSidebarProps) {
       href: "/dashboard/admin/reports",
       icon: BarChart3,
       roles: ["admin"],
-    },
-    {
-      name: "Cài đặt",
-      href: "/dashboard/settings",
-      icon: Settings,
-      roles: ["job_seeker", "employer", "admin"],
     },
   ];
 

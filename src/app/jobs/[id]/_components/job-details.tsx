@@ -1,23 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { useJob } from "@/hooks/jobs";
-import { useUser } from "@/hooks/auth";
-import { useCreateApplication } from "@/hooks/job-applications";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { ApplyJobDialog } from "@/components/apply-job-dialog";
 import {
   MapPin,
   Clock,
@@ -41,9 +31,6 @@ interface JobDetailsProps {
 
 export function JobDetails({ jobId }: JobDetailsProps) {
   const { data: job, isLoading, error } = useJob({ id: parseInt(jobId) });
-  const { data: user } = useUser();
-  const createApplication = useCreateApplication();
-  const [showApplicationDialog, setShowApplicationDialog] = useState(false);
 
   if (isLoading) {
     return <div>Đang tải...</div>;
@@ -110,25 +97,6 @@ export function JobDetails({ jobId }: JobDetailsProps) {
       executive: "Quản lý",
     };
     return levels[level] || level;
-  };
-
-  const handleApply = async () => {
-    if (!user) {
-      toast.error("Vui lòng đăng nhập để ứng tuyển");
-      return;
-    }
-
-    try {
-      await createApplication.mutateAsync({
-        job_id: job.id,
-        cover_letter: "",
-      });
-
-      toast.success("Ứng tuyển thành công!");
-      setShowApplicationDialog(false);
-    } catch {
-      toast.error("Có lỗi xảy ra khi ứng tuyển. Vui lòng thử lại.");
-    }
   };
 
   const handleShare = async () => {
@@ -249,42 +217,12 @@ export function JobDetails({ jobId }: JobDetailsProps) {
 
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Dialog
-              open={showApplicationDialog}
-              onOpenChange={setShowApplicationDialog}
-            >
-              <DialogTrigger asChild>
-                <Button size="lg" className="flex-1 min-w-fit">
-                  <Check className="h-4 w-4 mr-2" />
-                  Ứng tuyển ngay
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Xác nhận ứng tuyển</DialogTitle>
-                  <DialogDescription>
-                    Bạn có chắc chắn muốn ứng tuyển vào vị trí &ldquo;
-                    {job.title}&rdquo; tại {job.company?.name || "công ty này"}?
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex gap-3 justify-end">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowApplicationDialog(false)}
-                  >
-                    Hủy
-                  </Button>
-                  <Button
-                    onClick={handleApply}
-                    disabled={createApplication.isPending}
-                  >
-                    {createApplication.isPending
-                      ? "Đang ứng tuyển..."
-                      : "Xác nhận"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <ApplyJobDialog job={job}>
+              <Button size="lg" className="flex-1 min-w-fit">
+                <Check className="h-4 w-4 mr-2" />
+                Ứng tuyển ngay
+              </Button>
+            </ApplyJobDialog>
 
             <Button variant="outline" size="lg" onClick={handleShare}>
               <Share2 className="h-4 w-4 mr-2" />

@@ -2,23 +2,22 @@ import { Suspense } from "react";
 import { ProfileContent } from "./_components/profile-content";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
+import { PageWrapper } from "@/components/page-wrapper";
 
 export default function ProfilePage() {
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
-      {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Hồ sơ ứng viên</h1>
-        <p className="text-muted-foreground">
-          Quản lý thông tin cá nhân và CV của bạn
-        </p>
-      </div>
+    <PageWrapper maxWidth="4xl">
+      <PageHeader
+        title="Hồ sơ ứng viên"
+        description="Quản lý thông tin cá nhân và CV của bạn"
+        className="border-none pb-0"
+      />
 
-      {/* Profile Content */}
       <Suspense fallback={<ProfileSkeleton />}>
         <ProfileContent />
       </Suspense>
-    </div>
+    </PageWrapper>
   );
 }
 

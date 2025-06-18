@@ -51,6 +51,7 @@ export type CompanySize = Database["public"]["Enums"]["company_size"];
 // Application Management Types
 export type DatabaseJobApplication = Application & {
   job?: Partial<Job> & {
+    location?: Location | null;
     company?: Partial<Company> & {
       industry?: Industry | null;
       location?: Location | null;

@@ -7,6 +7,8 @@ import {
   EmployerDashboardStats,
   AdminDashboardStats,
 } from "@/types/custom.types";
+import { PageHeader } from "@/components/page-header";
+import { DashboardPageWrapper } from "@/components/page-wrapper";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -29,14 +31,14 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">
-          Chào mừng trở lại,{" "}
-          {profileResult.data.full_name || profileResult.data.email}
-        </p>
-      </div>
+    <DashboardPageWrapper>
+      <PageHeader
+        title="Dashboard"
+        description={`Chào mừng trở lại, ${
+          profileResult.data.full_name || profileResult.data.email
+        }`}
+        className="border-none pb-0"
+      />
 
       {/* Dashboard content based on user role */}
       <div className="grid gap-6">
@@ -162,6 +164,6 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
-    </div>
+    </DashboardPageWrapper>
   );
 }
