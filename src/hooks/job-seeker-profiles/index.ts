@@ -4,4 +4,5 @@ export { useCurrentJobSeekerProfile } from "./use-current-profile";
 export { useCreateJobSeekerProfile } from "./use-create-profile";
 export { useUpdateJobSeekerProfile } from "./use-update-profile";
 export { useDeleteJobSeekerProfile } from "./use-delete-profile";
-export { useUploadResume } from "./use-upload-resume"; 
+export { useUploadResume } from "./use-upload-resume";
+export { useDeleteResume } from "./use-delete-resume"; 

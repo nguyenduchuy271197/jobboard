@@ -35,8 +35,8 @@ export async function uploadResume(params: UploadResumeParams): Promise<Result> 
       return { success: false, error: "Chỉ chấp nhận file PDF, DOC, DOCX" };
     }
 
-    // 5MB limit
-    if (file.size > 5 * 1024 * 1024) {
+    // 50MB limit to match UI
+    if (file.size > 50 * 1024 * 1024) {
       return { success: false, error: ERROR_MESSAGES.FILE.TOO_LARGE };
     }
 

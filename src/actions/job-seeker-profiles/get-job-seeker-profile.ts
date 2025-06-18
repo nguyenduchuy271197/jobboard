@@ -27,9 +27,8 @@ export async function getJobSeekerProfile(params: GetJobSeekerProfileParams): Pr
       .from("job_seeker_profiles")
       .select(`
         *,
-        user:users(id, email, full_name, avatar_url),
-        industry:industries(id, name, slug),
-        location:locations(id, name, slug)
+        user:profiles!user_id(id, email, full_name, avatar_url),
+        location:locations!preferred_location_id(id, name, slug)
       `)
       .eq("user_id", data.user_id)
       .single();
