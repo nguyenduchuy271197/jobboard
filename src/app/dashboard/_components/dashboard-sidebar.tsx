@@ -16,6 +16,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  Tags,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -59,7 +60,7 @@ export default function DashboardSidebar({ profile }: DashboardSidebarProps) {
       name: "Hồ sơ cá nhân",
       href: "/dashboard/profile",
       icon: User,
-      roles: ["job_seeker", "employer", "admin"],
+      roles: ["job_seeker"],
     },
     {
       name: "Đơn ứng tuyển",
@@ -100,9 +101,9 @@ export default function DashboardSidebar({ profile }: DashboardSidebarProps) {
       roles: ["admin"],
     },
     {
-      name: "Báo cáo",
-      href: "/dashboard/admin/reports",
-      icon: BarChart3,
+      name: "Quản lý danh mục",
+      href: "/dashboard/admin/categories",
+      icon: Tags,
       roles: ["admin"],
     },
   ];
