@@ -65,8 +65,8 @@ export function UserRoleDialog({
 
     try {
       const result = await updateRoleMutation.mutateAsync({
-        userId: user.id,
-        newRole: selectedRole as "job_seeker" | "employer" | "admin",
+        user_id: user.id,
+        role: selectedRole as "job_seeker" | "employer" | "admin",
       });
 
       if (result.success) {

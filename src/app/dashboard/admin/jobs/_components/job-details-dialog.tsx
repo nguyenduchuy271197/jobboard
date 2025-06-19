@@ -18,7 +18,6 @@ import {
   Calendar,
   Users,
   Briefcase,
-  CheckCircle,
 } from "lucide-react";
 import type { DatabaseJob } from "@/types/custom.types";
 
@@ -123,7 +122,7 @@ export function JobDetailsDialog({
               <h1 className="text-2xl font-bold text-gray-900">{job.title}</h1>
               <div className="flex items-center gap-2 mt-2">
                 {getStatusBadge(job.status)}
-                {getJobTypeBadge(job.job_type)}
+                {getJobTypeBadge(job.employment_type)}
               </div>
             </div>
 
@@ -149,7 +148,7 @@ export function JobDetailsDialog({
               <div className="flex items-center gap-2 text-gray-600">
                 <DollarSign className="h-4 w-4" />
                 <span className="font-medium text-green-600">
-                  {formatSalary(job.min_salary, job.max_salary)}
+                  {formatSalary(job.salary_min, job.salary_max)}
                 </span>
               </div>
 
@@ -238,13 +237,17 @@ export function JobDetailsDialog({
                   </p>
                 </div>
 
-                {job.expires_at && (
+                {job.application_deadline && (
                   <div>
                     <p className="text-sm text-gray-500">Hạn ứng tuyển</p>
                     <p className="font-medium">
-                      {format(new Date(job.expires_at), "dd/MM/yyyy", {
-                        locale: vi,
-                      })}
+                      {format(
+                        new Date(job.application_deadline),
+                        "dd/MM/yyyy",
+                        {
+                          locale: vi,
+                        }
+                      )}
                     </p>
                   </div>
                 )}
@@ -261,7 +264,9 @@ export function JobDetailsDialog({
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm text-gray-500">Loại hình công việc</p>
-                  <div className="mt-1">{getJobTypeBadge(job.job_type)}</div>
+                  <div className="mt-1">
+                    {getJobTypeBadge(job.employment_type)}
+                  </div>
                 </div>
 
                 <div>
@@ -275,16 +280,6 @@ export function JobDetailsDialog({
                   <p className="text-sm text-gray-500">Trạng thái</p>
                   <div className="mt-1">{getStatusBadge(job.status)}</div>
                 </div>
-
-                {job.is_featured && (
-                  <div>
-                    <p className="text-sm text-gray-500">Tin nổi bật</p>
-                    <div className="flex items-center gap-1 text-yellow-600">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="font-medium">Có</span>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>

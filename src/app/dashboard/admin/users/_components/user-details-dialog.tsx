@@ -17,7 +17,6 @@ import {
   Shield,
   User,
   Phone,
-  MapPin,
   UserCheck,
   UserX,
 } from "lucide-react";
@@ -130,26 +129,7 @@ export function UserDetailsDialog({
                     </div>
                   </div>
                 )}
-
-                {user.location && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-gray-500" />
-                    <div>
-                      <p className="text-sm text-gray-500">Địa chỉ</p>
-                      <p className="font-medium">{user.location}</p>
-                    </div>
-                  </div>
-                )}
               </div>
-
-              {user.bio && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Mô tả bản thân</p>
-                  <p className="text-sm bg-gray-50 p-3 rounded-md">
-                    {user.bio}
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
 

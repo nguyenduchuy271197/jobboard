@@ -70,9 +70,10 @@ export function JobsContent() {
 
   const { data: statsData, isLoading: statsLoading } = useJobStatistics();
 
-  const jobs = allJobsData?.jobs || [];
-  const total = allJobsData?.total || 0;
-  const pendingCount = pendingJobsData?.length || 0;
+  const jobs = (allJobsData?.success ? allJobsData.data.jobs : []) || [];
+  const total = (allJobsData?.success ? allJobsData.data.total : 0) || 0;
+  const pendingCount =
+    (pendingJobsData?.success ? pendingJobsData.data.jobs.length : 0) || 0;
 
   if (allJobsError) {
     return (
@@ -99,10 +100,14 @@ export function JobsContent() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {statsData?.total_jobs || 0}
+                  {(statsData?.success ? statsData.data.total_jobs : 0) || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  +{statsData?.new_jobs_this_month || 0} tin mới tháng này
+                  +
+                  {(statsData?.success
+                    ? statsData.data.new_jobs_this_month
+                    : 0) || 0}{" "}
+                  tin mới tháng này
                 </p>
               </>
             )}
@@ -139,7 +144,7 @@ export function JobsContent() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-green-600">
-                  {statsData?.published_jobs || 0}
+                  {(statsData?.success ? statsData.data.active_jobs : 0) || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Đang hiển thị công khai
@@ -160,7 +165,7 @@ export function JobsContent() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {statsData?.archived_jobs || 0}
+                  {(statsData?.success ? statsData.data.archived_jobs : 0) || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Không còn hiển thị

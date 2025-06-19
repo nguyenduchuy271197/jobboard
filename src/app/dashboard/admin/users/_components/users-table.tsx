@@ -102,7 +102,7 @@ export function UsersTable({ users, isLoading }: UsersTableProps) {
     try {
       if (user.is_active) {
         const result = await deactivateUserMutation.mutateAsync({
-          userId: user.id,
+          user_id: user.id,
         });
         if (result.success) {
           toast.success(
@@ -113,7 +113,7 @@ export function UsersTable({ users, isLoading }: UsersTableProps) {
         }
       } else {
         const result = await activateUserMutation.mutateAsync({
-          userId: user.id,
+          user_id: user.id,
         });
         if (result.success) {
           toast.success(

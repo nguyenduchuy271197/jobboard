@@ -44,8 +44,8 @@ export function UsersContent() {
 
   const { data: statsData, isLoading: statsLoading } = useUserStatistics();
 
-  const users = usersData?.users || [];
-  const total = usersData?.total || 0;
+  const users = (usersData?.success ? usersData.data.users : []) || [];
+  const total = (usersData?.success ? usersData.data.total : 0) || 0;
 
   if (usersError) {
     return (
@@ -72,11 +72,14 @@ export function UsersContent() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {statsData?.total_users || 0}
+                  {(statsData?.success ? statsData.data.total_users : 0) || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  +{statsData?.new_users_this_month || 0} người dùng mới tháng
-                  này
+                  +
+                  {(statsData?.success
+                    ? statsData.data.new_users_this_month
+                    : 0) || 0}{" "}
+                  người dùng mới tháng này
                 </p>
               </>
             )}
@@ -96,12 +99,14 @@ export function UsersContent() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {statsData?.active_users || 0}
+                  {(statsData?.success ? statsData.data.active_users : 0) || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {statsData?.total_users
+                  {statsData?.success && statsData.data.total_users
                     ? Math.round(
-                        (statsData.active_users / statsData.total_users) * 100
+                        (statsData.data.active_users /
+                          statsData.data.total_users) *
+                          100
                       )
                     : 0}
                   % tổng số người dùng
@@ -124,12 +129,15 @@ export function UsersContent() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {statsData?.inactive_users || 0}
+                  {(statsData?.success ? statsData.data.inactive_users : 0) ||
+                    0}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {statsData?.total_users
+                  {statsData?.success && statsData.data.total_users
                     ? Math.round(
-                        (statsData.inactive_users / statsData.total_users) * 100
+                        (statsData.data.inactive_users /
+                          statsData.data.total_users) *
+                          100
                       )
                     : 0}
                   % tổng số người dùng

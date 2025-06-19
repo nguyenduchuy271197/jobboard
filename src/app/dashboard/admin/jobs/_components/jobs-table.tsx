@@ -122,7 +122,7 @@ export function JobsTable({
 
   const handleApprove = async (job: DatabaseJob) => {
     try {
-      const result = await approveJobMutation.mutateAsync({ jobId: job.id });
+      const result = await approveJobMutation.mutateAsync({ job_id: job.id });
       if (result.success) {
         toast.success(`Đã duyệt tin tuyển dụng "${job.title}"`);
       } else {
@@ -135,7 +135,7 @@ export function JobsTable({
 
   const handleReject = async (job: DatabaseJob) => {
     try {
-      const result = await rejectJobMutation.mutateAsync({ jobId: job.id });
+      const result = await rejectJobMutation.mutateAsync({ job_id: job.id });
       if (result.success) {
         toast.success(`Đã từ chối tin tuyển dụng "${job.title}"`);
       } else {
@@ -148,7 +148,7 @@ export function JobsTable({
 
   const handleArchive = async (job: DatabaseJob) => {
     try {
-      const result = await archiveJobMutation.mutateAsync({ jobId: job.id });
+      const result = await archiveJobMutation.mutateAsync(job.id);
       if (result.success) {
         toast.success(`Đã lưu trữ tin tuyển dụng "${job.title}"`);
       } else {
@@ -165,7 +165,7 @@ export function JobsTable({
     }
 
     try {
-      const result = await deleteJobMutation.mutateAsync({ jobId: job.id });
+      const result = await deleteJobMutation.mutateAsync({ job_id: job.id });
       if (result.success) {
         toast.success(`Đã xóa tin tuyển dụng "${job.title}"`);
       } else {
@@ -259,7 +259,7 @@ export function JobsTable({
                 </TableCell>
                 <TableCell>
                   <div className="text-sm font-medium text-green-600">
-                    {formatSalary(job.min_salary, job.max_salary)}
+                    {formatSalary(job.salary_min, job.salary_max)}
                   </div>
                 </TableCell>
                 <TableCell>{getStatusBadge(job.status)}</TableCell>

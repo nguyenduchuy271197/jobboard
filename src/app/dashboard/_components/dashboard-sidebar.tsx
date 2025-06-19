@@ -13,7 +13,6 @@ import {
   FileText,
   LogOut,
   Users,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Tags,
