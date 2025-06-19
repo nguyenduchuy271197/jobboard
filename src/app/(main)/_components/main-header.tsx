@@ -9,26 +9,8 @@ export default function MainHeader() {
         <div className="flex items-center justify-between">
           <Logo />
           <nav className="hidden md:flex items-center space-x-6">
-            <Link
-              href="/jobs"
-              className="text-sm font-medium hover:text-primary transition-colors"
-            >
-              Việc làm
-            </Link>
-            <Link
-              href="/dashboard"
-              className="text-sm font-medium hover:text-primary transition-colors"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/auth/login"
-              className="text-sm font-medium hover:text-primary transition-colors"
-            >
-              Đăng nhập
-            </Link>
-            <Link href="/auth/register">
-              <Button size="sm">Đăng ký</Button>
+            <Link href="/auth/login">
+              <Button size="sm">Đăng nhập</Button>
             </Link>
           </nav>
         </div>
