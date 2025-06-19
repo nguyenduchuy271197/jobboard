@@ -18,7 +18,7 @@ export function useJobApplicationsForJob(jobId: number) {
     enabled: !!jobId && jobId > 0,
     retry: (failureCount, error) => {
       // Don't retry on not found or unauthorized errors
-      if (error.message === "Công việc không tồn tại" || error.message === "Bạn không có quyền xem hồ sơ ứng tuyển của công việc này") {
+      if (error.message === "Công việc không tồn tại" || error.message === "Vui lòng đăng nhập để thực hiện thao tác này") {
         return false;
       }
       return failureCount < 3;

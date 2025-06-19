@@ -17,7 +17,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Edit, Trash2, Eye, Calendar } from "lucide-react";
+import {
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  Eye,
+  Calendar,
+  Users,
+} from "lucide-react";
+import Link from "next/link";
 import { useCompanyJobs } from "@/hooks/jobs/use-company-jobs";
 import { useDeleteJob } from "@/hooks/jobs/use-delete-job";
 import { Job, Location, Industry, Company } from "@/types/custom.types";
@@ -187,6 +195,18 @@ export function JobsTable({ companyId }: JobsTableProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/jobs/${job.id}`}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Chi tiết
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/jobs/${job.id}/applicants`}>
+                            <Users className="mr-2 h-4 w-4" />
+                            Ứng viên ({job.applications_count})
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <a
                             href={`/jobs/${job.id}`}

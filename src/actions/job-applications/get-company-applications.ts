@@ -59,7 +59,7 @@ export async function getCompanyApplications(
         )
       `)
       .eq("job.company_id", validCompanyId)
-      .order("created_at", { ascending: false });
+      .order("applied_at", { ascending: false });
 
     if (error) {
       return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };

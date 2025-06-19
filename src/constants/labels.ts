@@ -40,6 +40,25 @@ export const APPLICATION_STATUS_CONFIG = {
   },
 } as const;
 
+export const JOB_STATUS_CONFIG = {
+  draft: {
+    label: "Nháp",
+    color: "bg-gray-100 text-gray-800 border-gray-200",
+  },
+  active: {
+    label: "Đang tuyển",
+    color: "bg-green-100 text-green-800 border-green-200",
+  },
+  paused: {
+    label: "Tạm dừng",
+    color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  },
+  closed: {
+    label: "Đã đóng",
+    color: "bg-red-100 text-red-800 border-red-200",
+  },
+} as const;
+
 // Helper function to get experience level label
 export const getExperienceLevelLabel = (level: string) => {
   return EXPERIENCE_LEVEL_LABELS[level as keyof typeof EXPERIENCE_LEVEL_LABELS] || level;
@@ -53,6 +72,14 @@ export const getEmploymentTypeLabel = (type: string) => {
 // Helper function to get application status config
 export const getApplicationStatusConfig = (status: string) => {
   return APPLICATION_STATUS_CONFIG[status as keyof typeof APPLICATION_STATUS_CONFIG] || {
+    label: status,
+    color: "bg-gray-100 text-gray-800 border-gray-200",
+  };
+};
+
+// Helper function to get job status config
+export const getJobStatusConfig = (status: string) => {
+  return JOB_STATUS_CONFIG[status as keyof typeof JOB_STATUS_CONFIG] || {
     label: status,
     color: "bg-gray-100 text-gray-800 border-gray-200",
   };
