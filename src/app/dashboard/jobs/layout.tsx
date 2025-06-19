@@ -1,4 +1,4 @@
-export default function JobsPostedLayout({
+export default function JobsLayout({
   children,
 }: {
   children: React.ReactNode;

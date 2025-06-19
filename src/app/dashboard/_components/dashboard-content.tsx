@@ -178,7 +178,7 @@ export default function DashboardContent({
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
           <Button asChild>
-            <Link href="/dashboard/jobs-posted">
+            <Link href="/dashboard/jobs">
               <Plus className="h-4 w-4 mr-2" />
               Đăng tin tuyển dụng
             </Link>

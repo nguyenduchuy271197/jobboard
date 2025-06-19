@@ -17,7 +17,7 @@ export function PageHeader({
     <div className={cn("border-b border-gray-200 pb-5", className)}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+          <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl sm:truncate">
             {title}
           </h1>
           {description && (

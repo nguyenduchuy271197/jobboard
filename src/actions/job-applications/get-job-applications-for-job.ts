@@ -45,6 +45,7 @@ export async function getJobApplicationsForJob(
       .eq("id", validJobId)
       .single();
 
+
     if (jobError || !job) {
       return { success: false, error: ERROR_MESSAGES.JOB.NOT_FOUND };
     }
@@ -75,7 +76,7 @@ export async function getJobApplicationsForJob(
         )
       `)
       .eq("job_id", validJobId)
-      .order("created_at", { ascending: false });
+      .order("applied_at", { ascending: false });
 
     if (error) {
       return { success: false, error: ERROR_MESSAGES.DATABASE.QUERY_FAILED };

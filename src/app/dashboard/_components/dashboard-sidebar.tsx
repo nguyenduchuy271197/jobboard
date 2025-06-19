@@ -76,7 +76,7 @@ export default function DashboardSidebar({ profile }: DashboardSidebarProps) {
     },
     {
       name: "Tin tuyển dụng",
-      href: "/dashboard/jobs-posted",
+      href: "/dashboard/jobs",
       icon: Briefcase,
       roles: ["employer"],
     },

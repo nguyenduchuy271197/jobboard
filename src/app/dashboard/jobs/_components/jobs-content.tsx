@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function JobsPostedContent() {
+export function JobsContent() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(
     null
