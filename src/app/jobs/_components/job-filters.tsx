@@ -243,7 +243,7 @@ export function JobFilters({ searchParams }: JobFiltersProps) {
             onValueChange={(value) => updateFilter("industry", value)}
             disabled={industriesLoading}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Chọn ngành nghề" />
             </SelectTrigger>
             <SelectContent>
@@ -265,7 +265,7 @@ export function JobFilters({ searchParams }: JobFiltersProps) {
             onValueChange={(value) => updateFilter("location", value)}
             disabled={locationsLoading}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Chọn địa điểm" />
             </SelectTrigger>
             <SelectContent>
@@ -286,7 +286,7 @@ export function JobFilters({ searchParams }: JobFiltersProps) {
             value={searchParams.employment_type || "all"}
             onValueChange={(value) => updateFilter("employment_type", value)}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Chọn loại hình" />
             </SelectTrigger>
             <SelectContent>
@@ -307,7 +307,7 @@ export function JobFilters({ searchParams }: JobFiltersProps) {
             value={searchParams.experience_level || "all"}
             onValueChange={(value) => updateFilter("experience_level", value)}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Chọn cấp độ" />
             </SelectTrigger>
             <SelectContent>
@@ -343,7 +343,7 @@ export function JobFilters({ searchParams }: JobFiltersProps) {
               }
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Chọn mức lương" />
             </SelectTrigger>
             <SelectContent>

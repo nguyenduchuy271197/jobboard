@@ -227,9 +227,9 @@ export function JobsTable({
                     <div className="font-medium text-gray-900 line-clamp-1">
                       {job.title}
                     </div>
-                    <div className="text-sm text-gray-500 line-clamp-2">
+                    {/* <div className="text-sm text-gray-500 line-clamp-2">
                       {job.description}
-                    </div>
+                    </div> */}
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       {job.industry && (
                         <span className="inline-flex items-center gap-1">
