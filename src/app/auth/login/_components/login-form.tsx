@@ -128,14 +128,14 @@ export default function LoginForm() {
           )}
         </Button>
 
-        <div className="text-center">
+        {/* <div className="text-center">
           <a
             href="/auth/forgot-password"
             className="text-sm text-indigo-600 hover:text-indigo-500"
           >
             Quên mật khẩu?
           </a>
-        </div>
+        </div> */}
       </form>
     </Form>
   );

@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  SearchIcon,
   BriefcaseIcon,
   BuildingIcon,
   UsersIcon,
@@ -29,27 +28,6 @@ export default function HomePage() {
             Khám phá hàng ngàn cơ hội việc làm từ các công ty hàng đầu. Tìm
             kiếm, ứng tuyển và phát triển sự nghiệp của bạn ngay hôm nay.
           </p>
-
-          {/* Quick Search */}
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 mb-8 max-w-2xl mx-auto">
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    placeholder="Tìm kiếm vị trí, công ty..."
-                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <Link href="/jobs">
-                <Button size="lg" className="px-8">
-                  Tìm kiếm
-                </Button>
-              </Link>
-            </div>
-          </div>
 
           <div className="flex flex-wrap justify-center gap-4">
             <Link href="/jobs">
@@ -174,15 +152,6 @@ export default function HomePage() {
             <Link href="/auth/register">
               <Button size="lg" variant="secondary">
                 Đăng ký miễn phí
-              </Button>
-            </Link>
-            <Link href="/jobs">
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-primary-foreground border-primary-foreground hover:bg-primary-foreground hover:text-primary"
-              >
-                Tìm việc ngay
               </Button>
             </Link>
           </div>

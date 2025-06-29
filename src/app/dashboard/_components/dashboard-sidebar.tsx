@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useLogout } from "@/hooks/auth/use-logout";
 import { toast } from "sonner";
+import Logo from "@/components/logo";
 
 interface DashboardSidebarProps {
   profile: Profile;
@@ -131,6 +132,10 @@ export default function DashboardSidebar({ profile }: DashboardSidebarProps) {
         collapsed ? "w-16" : "w-64"
       )}
     >
+      <div className="p-4 flex items-center border-b">
+        <Logo onlyIcon={collapsed} />
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         {!collapsed && (
