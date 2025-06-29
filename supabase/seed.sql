@@ -176,8 +176,152 @@ INSERT INTO public.jobs (company_id, posted_by, title, description, requirements
    'MS/PhD in Computer Science/Statistics; 3+ năm kinh nghiệm data science; Thành thạo Python, R, SQL; Kinh nghiệm ML/AI; Big data technologies; Problem-solving skills',
    'Lương top market 40-70 triệu; Research budget; Conference participation; Publishing opportunities; Stock options',
    'full_time', 'senior_level', 1, 2, 'VNG Campus, Quận 7, TP. Hồ Chí Minh', false, 40000000, 70000000, 'VND',
-   ARRAY['Python', 'Machine Learning', 'SQL', 'Statistics', 'Big Data', 'AI', 'R'], 'published', now() + interval '28 days', now() - interval '6 days', 145);
+   ARRAY['Python', 'Machine Learning', 'SQL', 'Statistics', 'Big Data', 'AI', 'R'], 'published', now() + interval '28 days', now() - interval '6 days', 145),
+  -- Jobs từ FPT Corporation (company_id: 1)
+(1, '00000000-0000-0000-0000-000000000010', 'Backend Developer (.NET)',
+ 'FPT Software tìm kiếm Backend Developer có kinh nghiệm với .NET để phát triển các hệ thống enterprise cho khách hàng quốc tế. Bạn sẽ làm việc với các dự án quy mô lớn và công nghệ tiên tiến.',
+ 'Tối thiểu 2 năm kinh nghiệm .NET Core/Framework; Thành thạo C#, ASP.NET Web API; Kinh nghiệm với SQL Server, Entity Framework; Hiểu biết về microservices architecture; Tiếng Anh giao tiếp tốt',
+ 'Lương 18-32 triệu + project bonus; Đào tạo Microsoft certification; Cơ hội onsite tại Nhật, Úc; Bảo hiểm sức khỏe toàn diện; 13th month salary',
+ 'full_time', 'mid_level', 1, 1, 'Tòa nhà FPT, 17 Duy Tân, Cầu Giấy, Hà Nội', false, 18000000, 32000000, 'VND',
+ ARRAY['.NET Core', 'C#', 'ASP.NET', 'SQL Server', 'Entity Framework', 'Microservices'], 'published', now() + interval '25 days', now() - interval '3 days', 92),
 
+(1, '00000000-0000-0000-0000-000000000010', 'QA Engineer (Manual + Automation)',
+ 'Chúng tôi cần QA Engineer để đảm bảo chất lượng sản phẩm cho các dự án outsourcing. Vị trí này phù hợp cho người muốn phát triển career trong testing và quality assurance.',
+ 'Tối thiểu 1 năm kinh nghiệm testing; Kinh nghiệm với test automation tools (Selenium, Cypress); Hiểu biết về SDLC và testing methodologies; Kỹ năng viết test cases và bug reports; Mindset tỉ mỉ và chi tiết',
+ 'Lương 12-22 triệu; Training ISTQB certification; Môi trường học hỏi từ senior QA; Flexible working time; Career path rõ ràng',
+ 'full_time', 'entry_level', 1, 1, 'FPT Software Hà Nội', true, 12000000, 22000000, 'VND',
+ ARRAY['Manual Testing', 'Selenium', 'Cypress', 'Test Automation', 'API Testing', 'JIRA'], 'published', now() + interval '30 days', now() - interval '1 day', 45),
+
+-- Jobs từ VNG Corporation (company_id: 2)
+(2, '00000000-0000-0000-0000-000000000011', 'Game Developer (Unity)',
+ 'VNG Games đang tìm kiếm Game Developer để phát triển mobile games cho thị trường Đông Nam Á. Bạn sẽ tham gia vào việc tạo ra những trò chơi được hàng triệu người yêu thích.',
+ 'Tối thiểu 2 năm kinh nghiệm Unity; Thành thạo C# và Unity Engine; Kinh nghiệm phát triển mobile games; Hiểu biết về game optimization và performance; Passion về gaming industry',
+ 'Lương 22-40 triệu + game revenue bonus; Game industry exposure; Creative working environment; Top-tier equipment; International team collaboration',
+ 'full_time', 'mid_level', 1, 2, 'VNG Campus, Quận 7, TP. Hồ Chí Minh', false, 22000000, 40000000, 'VND',
+ ARRAY['Unity', 'C#', 'Mobile Game Development', 'Game Optimization', '3D Graphics', 'Git'], 'published', now() + interval '20 days', now() - interval '4 days', 167),
+
+(2, '00000000-0000-0000-0000-000000000011', 'Security Engineer',
+ 'VNG cần Security Engineer để bảo vệ hệ thống và dữ liệu của hàng triệu users. Đây là cơ hội tuyệt vời để làm việc với enterprise-level security challenges.',
+ 'Bằng đại học CNTT/An toàn thông tin; Tối thiểu 3 năm kinh nghiệm security; Kinh nghiệm với penetration testing, vulnerability assessment; Hiểu biết về network security, cryptography; Security certifications là advantage',
+ 'Lương 30-55 triệu; Security conference budget; Certification sponsorship; High-impact work; Learning từ top security experts',
+ 'full_time', 'senior_level', 1, 2, 'VNG Campus, TP. Hồ Chí Minh', false, 30000000, 55000000, 'VND',
+ ARRAY['Penetration Testing', 'Network Security', 'Cryptography', 'Incident Response', 'SIEM', 'Linux'], 'published', now() + interval '35 days', now() - interval '2 days', 89),
+
+-- Jobs từ Tiki (company_id: 3)
+(3, '00000000-0000-0000-0000-000000000012', 'Business Analyst',
+ 'Tiki tuyển Business Analyst để phân tích business requirements và optimize các quy trình operations. Bạn sẽ bridge gap giữa business và technology teams.',
+ 'Bằng đại học kinh tế/quản trị; Tối thiểu 2 năm kinh nghiệm BA; Strong analytical và problem-solving skills; Thành thạo Excel, SQL; Kinh nghiệm với process mapping; Communication skills tốt',
+ 'Lương 18-30 triệu; Direct impact lên business decisions; Data-driven working environment; Learning opportunities; Stock options',
+ 'full_time', 'mid_level', 13, 2, 'Tiki Office, Quận Tân Bình, TP. Hồ Chí Minh', false, 18000000, 30000000, 'VND',
+ ARRAY['Business Analysis', 'SQL', 'Excel', 'Process Mapping', 'Requirements Gathering', 'Stakeholder Management'], 'published', now() + interval '18 days', now() - interval '6 days', 134),
+
+(3, '00000000-0000-0000-0000-000000000012', 'Supply Chain Analyst',
+ 'Tiki cần Supply Chain Analyst để optimize logistics và inventory management. Đây là cơ hội làm việc với one of Vietnam''s largest e-commerce supply chains.',
+ 'Bằng đại học Supply Chain/Logistics/Industrial Engineering; Kinh nghiệm 1-3 năm; Strong Excel và data analysis skills; Hiểu biết về inventory management; Analytical mindset',
+ 'Lương 15-25 triệu; Exposure to large-scale operations; Professional development; Performance bonus; Modern workspace',
+ 'full_time', 'entry_level', 13, 2, 'Tiki Warehouse, Bình Dương', false, 15000000, 25000000, 'VND',
+ ARRAY['Supply Chain', 'Inventory Management', 'Excel', 'Data Analysis', 'Logistics', 'Operations'], 'published', now() + interval '22 days', now() - interval '5 days', 76),
+
+-- Jobs từ Techcombank (company_id: 4)
+(4, '00000000-0000-0000-0000-000000000013', 'Credit Risk Officer',
+ 'Techcombank tuyển Credit Risk Officer để đánh giá và quản lý rủi ro tín dụng cho various loan portfolios. Vị trí quan trọng trong việc maintain bank''s asset quality.',
+ 'Bằng đại học Finance/Banking/Economics; Tối thiểu 2 năm kinh nghiệm banking; Hiểu biết về credit analysis và risk assessment; Strong Excel và financial modeling; Attention to detail',
+ 'Lương 18-30 triệu + performance bonus; Comprehensive banking training; Career advancement trong big bank; Health insurance premium; Annual leave 16 days',
+ 'full_time', 'mid_level', 2, 1, 'Techcombank Tower, Hai Bà Trưng, Hà Nội', false, 18000000, 30000000, 'VND',
+ ARRAY['Credit Analysis', 'Risk Management', 'Financial Modeling', 'Excel', 'Banking Regulations', 'Due Diligence'], 'published', now() + interval '26 days', now() - interval '7 days', 58),
+
+(4, '00000000-0000-0000-0000-000000000013', 'Digital Banking Product Owner',
+ 'Techcombank cần Product Owner cho digital banking initiatives. Bạn sẽ drive development của mobile banking features và digital transformation projects.',
+ 'Bằng đại học CNTT/Kinh tế; Tối thiểu 3 năm kinh nghiệm product management; Hiểu biết về banking và fintech; Agile/Scrum experience; Strong stakeholder management skills',
+ 'Lương 25-45 triệu; Work on cutting-edge fintech; Impact millions of customers; Professional development budget; Flexible working arrangements',
+ 'full_time', 'senior_level', 2, 1, 'Techcombank Digital Hub, Hà Nội', true, 25000000, 45000000, 'VND',
+ ARRAY['Product Management', 'Digital Banking', 'Agile', 'Scrum', 'Fintech', 'User Experience'], 'published', now() + interval '28 days', now() - interval '3 days', 112),
+
+-- Jobs từ Vingroup (company_id: 5)
+(5, '00000000-0000-0000-0000-000000000014', 'Retail Operations Manager',
+ 'Vingroup Retail tuyển Operations Manager để quản lý operations của VinMart stores. Bạn sẽ optimize store performance và customer experience.',
+ 'Bằng đại học quản trị kinh doanh; Tối thiểu 4 năm kinh nghiệm retail management; Leadership và team management skills; Hiểu biết về retail operations; Data-driven decision making',
+ 'Lương 28-50 triệu + store performance bonus; Management training program; Career growth trong largest retail chain; Company benefits package; Vehicle allowance',
+ 'full_time', 'senior_level', 12, 1, 'VinMart Office, Vinhomes Times City, Hà Nội', false, 28000000, 50000000, 'VND',
+ ARRAY['Retail Management', 'Operations', 'Team Leadership', 'P&L Management', 'Customer Service', 'Inventory Control'], 'published', now() + interval '24 days', now() - interval '8 days', 95),
+
+(5, '00000000-0000-0000-0000-000000000014', 'Real Estate Investment Analyst',
+ 'Vinhomes cần Investment Analyst để evaluate real estate investment opportunities và support decision making cho various development projects.',
+ 'Bằng đại học Finance/Real Estate/Economics; Tối thiểu 2 năm kinh nghiệm investment analysis; Strong financial modeling skills; Hiểu biết về real estate market; Excel và PowerBI proficiency',
+ 'Lương 22-38 triệu; Work với prestigious real estate projects; Professional development; Exposure to senior management; Comprehensive benefits',
+ 'full_time', 'mid_level', 12, 1, 'Vinhomes Gallery, Landmark 81, TP. Hồ Chí Minh', false, 22000000, 38000000, 'VND',
+ ARRAY['Financial Analysis', 'Real Estate', 'Investment Analysis', 'Excel', 'PowerBI', 'Market Research'], 'published', now() + interval '21 days', now() - interval '9 days', 87),
+
+-- Additional diverse jobs với different industries
+(1, '00000000-0000-0000-0000-000000000010', 'UI/UX Designer',
+ 'FPT Software tìm UI/UX Designer để design user interfaces cho international clients. Bạn sẽ work với diverse projects from fintech to healthcare.',
+ 'Bằng đại học Design/Fine Arts; Tối thiểu 2 năm kinh nghiệm UI/UX; Thành thạo Figma, Adobe Creative Suite; Portfolio demonstrating design thinking; User research experience',
+ 'Lương 16-28 triệu; International client exposure; Design conference budget; Creative working environment; Latest design tools',
+ 'full_time', 'mid_level', 1, 1, 'FPT Design Center, Hà Nội', false, 16000000, 28000000, 'VND',
+ ARRAY['UI Design', 'UX Design', 'Figma', 'Adobe XD', 'Prototyping', 'User Research'], 'published', now() + interval '27 days', now() - interval '2 days', 73),
+
+(2, '00000000-0000-0000-0000-000000000011', 'Content Marketing Manager',
+ 'VNG cần Content Marketing Manager để develop content strategy cho Zalo ecosystem. Create compelling content that engages millions of Vietnamese users.',
+ 'Bằng đại học Marketing/Communications; Tối thiểu 3 năm kinh nghiệm content marketing; Strong writing skills (Vietnamese & English); Social media expertise; Creative thinking',
+ 'Lương 20-35 triệu; High-impact content reach; Creative freedom; Marketing budget; Brand building experience',
+ 'full_time', 'mid_level', 1, 2, 'VNG Office, TP. Hồ Chí Minh', false, 20000000, 35000000, 'VND',
+ ARRAY['Content Marketing', 'Social Media', 'Content Strategy', 'Creative Writing', 'Brand Management', 'Analytics'], 'published', now() + interval '19 days', now() - interval '4 days', 108),
+
+(3, '00000000-0000-0000-0000-000000000012', 'Customer Success Manager',
+ 'Tiki tuyển Customer Success Manager để improve customer satisfaction và retention. Build relationships với key merchants và drive platform adoption.',
+ 'Bằng đại học kinh tế/marketing; Tối thiểu 2 năm kinh nghiệm customer success; Strong communication và relationship building; Data analysis skills; Problem-solving mindset',
+ 'Lương 17-30 triệu; Direct customer impact; Relationship building skills; Performance incentives; Career growth opportunities',
+ 'full_time', 'mid_level', 13, 2, 'Tiki Customer Center, TP. Hồ Chí Minh', false, 17000000, 30000000, 'VND',
+ ARRAY['Customer Success', 'Relationship Management', 'Data Analysis', 'Communication', 'Problem Solving', 'CRM'], 'published', now() + interval '23 days', now() - interval '6 days', 91),
+
+(4, '00000000-0000-0000-0000-000000000013', 'Data Engineer',
+ 'Techcombank cần Data Engineer để build và maintain data pipelines supporting bank''s analytics và reporting needs. Work với big data technologies.',
+ 'Bằng đại học CNTT/Data Science; Tối thiểu 2 năm kinh nghiệm data engineering; Thành thạo Python, SQL; Kinh nghiệm với cloud platforms (AWS/Azure); ETL processes',
+ 'Lương 22-40 triệu; Cutting-edge data stack; Big data exposure; Cloud certification support; Technical growth path',
+ 'full_time', 'mid_level', 2, 1, 'Techcombank Data Center, Hà Nội', false, 22000000, 40000000, 'VND',
+ ARRAY['Python', 'SQL', 'ETL', 'AWS', 'Data Pipeline', 'Big Data', 'Apache Spark'], 'published', now() + interval '29 days', now() - interval '1 day', 64),
+
+(5, '00000000-0000-0000-0000-000000000014', 'Project Manager (Construction)',
+ 'Vinhomes tuyển Project Manager để manage construction projects của residential và commercial developments. Lead multi-million dollar projects.',
+ 'Bằng đại học Xây dựng/Civil Engineering; Tối thiểu 5 năm kinh nghiệm construction project management; PMP certification preferred; Strong leadership skills; Tiếng Anh giao tiếp',
+ 'Lương 35-60 triệu; Manage prestigious developments; Professional development; Leadership opportunities; Comprehensive benefits package',
+ 'full_time', 'senior_level', 12, 1, 'Vinhomes Project Office, Hà Nội', false, 35000000, 60000000, 'VND',
+ ARRAY['Project Management', 'Construction Management', 'PMP', 'Leadership', 'Risk Management', 'Quality Control'], 'published', now() + interval '31 days', now() - interval '5 days', 156),
+
+(1, '00000000-0000-0000-0000-000000000010', 'Machine Learning Engineer',
+ 'FPT AI Center tìm ML Engineer để develop AI solutions cho international clients. Work on computer vision, NLP và predictive analytics projects.',
+ 'MS Computer Science/AI; Tối thiểu 3 năm kinh nghiệm ML; Thành thạo Python, TensorFlow/PyTorch; Kinh nghiệm deploy ML models; Strong math/statistics background',
+ 'Lương 30-55 triệu; AI research opportunities; International AI projects; Conference participation; Cutting-edge technology exposure',
+ 'full_time', 'senior_level', 1, 1, 'FPT AI Lab, Hà Nội', false, 30000000, 55000000, 'VND',
+ ARRAY['Machine Learning', 'Python', 'TensorFlow', 'PyTorch', 'Computer Vision', 'NLP', 'Deep Learning'], 'published', now() + interval '33 days', now() - interval '3 days', 143),
+
+(2, '00000000-0000-0000-0000-000000000011', 'Technical Writer',
+ 'VNG cần Technical Writer để create documentation cho developer tools và APIs. Support engineer teams with clear, comprehensive documentation.',
+ 'Bằng đại học CNTT/English/Communications; Tối thiểu 2 năm kinh nghiệm technical writing; Strong English writing skills; Understanding of software development; API documentation experience',
+ 'Lương 15-25 triệu; Improve developer experience; English writing skill development; Tech industry exposure; Flexible working',
+ 'full_time', 'mid_level', 1, 2, 'VNG Developer Center, TP. Hồ Chí Minh', true, 15000000, 25000000, 'VND',
+ ARRAY['Technical Writing', 'API Documentation', 'English Writing', 'Software Documentation', 'Markdown', 'Git'], 'published', now() + interval '26 days', now() - interval '7 days', 52),
+
+(3, '00000000-0000-0000-0000-000000000012', 'Performance Marketing Specialist',
+ 'Tiki tuyển Performance Marketing Specialist để optimize digital advertising campaigns và drive customer acquisition với efficient CAC.',
+ 'Bằng đại học Marketing/Economics; Tối thiểu 2 năm kinh nghiệm performance marketing; Thành thạo Google Ads, Facebook Ads; Strong analytical skills; ROI optimization experience',
+ 'Lương 16-28 triệu; Large marketing budgets; Data-driven environment; Performance bonuses; Digital marketing skill development',
+ 'full_time', 'mid_level', 13, 2, 'Tiki Marketing Hub, TP. Hồ Chí Minh', false, 16000000, 28000000, 'VND',
+ ARRAY['Performance Marketing', 'Google Ads', 'Facebook Ads', 'Google Analytics', 'ROI Optimization', 'A/B Testing'], 'published', now() + interval '20 days', now() - interval '8 days', 119),
+
+(4, '00000000-0000-0000-0000-000000000013', 'Compliance Officer',
+ 'Techcombank cần Compliance Officer để ensure regulatory compliance và manage compliance risks. Critical role trong heavily regulated banking industry.',
+ 'Bằng đại học Law/Finance; Tối thiểu 3 năm kinh nghiệm compliance (preferably banking); Hiểu biết về banking regulations; Strong analytical và communication skills; Attention to detail',
+ 'Lương 20-35 triệu; Important regulatory role; Professional development; Banking industry expertise; Stable career path',
+ 'full_time', 'mid_level', 2, 1, 'Techcombank Compliance Dept, Hà Nội', false, 20000000, 35000000, 'VND',
+ ARRAY['Compliance', 'Banking Regulations', 'Risk Management', 'Legal Knowledge', 'Audit', 'Regulatory Reporting'], 'published', now() + interval '25 days', now() - interval '4 days', 67),
+
+(5, '00000000-0000-0000-0000-000000000014', 'Brand Manager',
+ 'Vingroup tuyển Brand Manager để manage và develop brand strategy cho VinFast automobile brand. Build Vietnam''s first global automotive brand.',
+ 'Bằng đại học Marketing/Business; Tối thiểu 4 năm kinh nghiệm brand management; Experience với automotive/luxury brands preferred; Creative thinking và strategic planning; Strong presentation skills',
+ 'Lương 30-50 triệu; Build global automotive brand; International exposure; Creative freedom; Brand building experience; Executive interaction',
+ 'full_time', 'senior_level', 12, 1, 'VinFast Headquarters, Hà Nội', false, 30000000, 50000000, 'VND',
+ ARRAY['Brand Management', 'Marketing Strategy', 'Brand Development', 'Creative Strategy', 'Market Research', 'Campaign Management'], 'published', now() + interval '32 days', now() - interval '2 days', 178);
 -- =================================
 -- SEED DATA CHO APPLICATIONS
 -- =================================
